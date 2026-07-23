@@ -1,9 +1,13 @@
 import dotenv from 'dotenv';
-dotenv.config({ path: path.join(__dirname, '..', '.env') });
+import path from 'path';
+
+// 本地开发加载.env；Render生产环境使用平台环境变量，不读取文件
+if (process.env.NODE_ENV !== "production") {
+  dotenv.config({ path: path.join(__dirname, '..', '.env') });
+}
 
 import express from 'express';
 import cors from 'cors';
-import path from 'path';
 import { initDatabase } from './db';
 import { authRouter } from './routes/auth';
 import { wardrobeRouter } from './routes/wardrobe';
