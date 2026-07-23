@@ -1,0 +1,89 @@
+<!--
+  认证页面 — 简化版，移除图标依赖
+-->
+<view class="page-auth">
+  <!-- Logo -->
+  <view class="logo-section">
+    <view class="logo-icon">
+      <text class="logo-emoji">✨</text>
+    </view>
+    <text class="logo-title">智绘衣橱</text>
+    <text class="logo-subtitle">AI 智能穿搭助手</text>
+  </view>
+
+  <!-- Card -->
+  <view class="auth-card">
+    <!-- Tabs -->
+    <view class="tab-switch">
+      <view
+        class="tab-item {{tab === 'login' ? 'tab-active' : ''}}"
+        bindtap="switchTab"
+        data-tab="login"
+      >
+        <text>登录</text>
+      </view>
+      <view
+        class="tab-item {{tab === 'register' ? 'tab-active' : ''}}"
+        bindtap="switchTab"
+        data-tab="register"
+      >
+        <text>注册</text>
+      </view>
+    </view>
+
+    <!-- Error -->
+    <view wx:if="{{error}}" class="error-msg">
+      <text>{{error}}</text>
+    </view>
+
+    <!-- Form -->
+    <form bindsubmit="handleSubmit">
+      <view class="form-group" wx:if="{{tab === 'register'}}">
+        <text class="form-label">用户名</text>
+        <input
+          class="form-input"
+          type="text"
+          value="{{username}}"
+          placeholder="2-20 个字符"
+          bindinput="onInput"
+          data-field="username"
+          maxlength="20"
+        />
+      </view>
+
+      <view class="form-group">
+        <text class="form-label">邮箱</text>
+        <input
+          class="form-input"
+          type="text"
+          value="{{email}}"
+          placeholder="your@email.com"
+          bindinput="onInput"
+          data-field="email"
+        />
+      </view>
+
+      <view class="form-group">
+        <text class="form-label">密码</text>
+        <input
+          class="form-input"
+          type="text"
+          password="{{true}}"
+          value="{{password}}"
+          placeholder="{{tab === 'register' ? '至少 6 个字符' : '输入密码'}}"
+          bindinput="onInput"
+          data-field="password"
+        />
+      </view>
+
+      <button
+        class="submit-btn"
+        form-type="submit"
+        loading="{{submitting}}"
+        disabled="{{submitting}}"
+      >
+        {{submitting ? '处理中...' : (tab === 'login' ? '登录' : '创建账号')}}
+      </button>
+    </form>
+  </view>
+</view>

@@ -1,0 +1,80 @@
+<!--
+  衣橱页 — 简化版
+-->
+<view class="page-wardrobe">
+  <!-- Toggle -->
+  <view class="toggle-section">
+    <view class="toggle-switch">
+      <view class="toggle-item {{activeTab === 'OWNED' ? 'toggle-active' : ''}}" bindtap="setTab" data-tab="OWNED">
+        <text>我的衣橱</text>
+      </view>
+      <view class="toggle-item {{activeTab === 'WISHLIST' ? 'toggle-active' : ''}}" bindtap="setTab" data-tab="WISHLIST">
+        <text>预购清单</text>
+        <view class="wishlist-dot"></view>
+      </view>
+    </view>
+  </view>
+
+  <!-- Search -->
+  <view class="search-section">
+    <view class="search-box">
+      <text class="search-icon-text">🔍</text>
+      <input
+        class="search-input"
+        type="text"
+        value="{{searchText}}"
+        placeholder="{{activeTab === 'OWNED' ? '搜索我的衣物...' : '搜索想买的...'}}"
+        bindinput="onSearch"
+      />
+    </view>
+    <view class="filter-btn">
+      <text>☰</text>
+    </view>
+  </view>
+
+  <!-- Category Tabs -->
+  <scroll-view class="category-scroll" scroll-x="true">
+    <view class="category-list">
+      <view
+        wx:for="{{categories}}"
+        wx:key="*this"
+        class="category-chip {{selectedCategory === item ? 'chip-active' : ''}}"
+        bindtap="setCategory"
+        data-cat="{{item}}"
+      >
+        <text>{{item === 'ALL' ? '全部' : item}}</text>
+      </view>
+    </view>
+  </scroll-view>
+
+  <!-- Grid -->
+  <scroll-view class="items-scroll" scroll-y="true">
+    <view class="items-grid">
+      <view wx:if="{{activeTab === 'OWNED'}}" class="add-card add-owned">
+        <view class="add-circle">
+          <text class="add-plus">+</text>
+        </view>
+        <text class="add-text">拍照录入</text>
+      </view>
+
+      <view wx:if="{{activeTab === 'WISHLIST'}}" class="add-card add-wishlist">
+        <view class="add-circle-wishlist">
+          <text class="add-plus-wishlist">✂️</text>
+        </view>
+        <text class="add-text-wishlist">截图/链接录入</text>
+        <text class="add-sub-wishlist">自动识别网图</text>
+      </view>
+
+      <view wx:for="{{filteredItems}}" wx:key="id" class="item-card">
+        <image src="{{item.imageUrl}}" class="item-image" mode="aspectFill" lazy-load="true" />
+        <view class="item-badge">
+          <text>{{item.category}}</text>
+        </view>
+        <view class="item-actions">
+          <text class="item-tag">{{item.tags[0]}}</text>
+          <text class="item-heart">♡</text>
+        </view>
+      </view>
+    </view>
+  </scroll-view>
+</view>

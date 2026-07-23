@@ -1,0 +1,49 @@
+{
+  "pages": [
+    "pages/auth/auth",
+    "pages/home/home",
+    "pages/wardrobe/wardrobe",
+    "pages/tryon/tryon",
+    "pages/profile/profile"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#ffffff",
+    "navigationBarTitleText": "智绘衣橱",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f8fafc"
+  },
+  "tabBar": {
+    "color": "#9ca3af",
+    "selectedColor": "#16a34a",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/home/home",
+        "text": "首页",
+        "iconPath": "images/tab-home.png",
+        "selectedIconPath": "images/tab-home-active.png"
+      },
+      {
+        "pagePath": "pages/wardrobe/wardrobe",
+        "text": "衣橱",
+        "iconPath": "images/tab-wardrobe.png",
+        "selectedIconPath": "images/tab-wardrobe-active.png"
+      },
+      {
+        "pagePath": "pages/tryon/tryon",
+        "text": "试衣间",
+        "iconPath": "images/tab-tryon.png",
+        "selectedIconPath": "images/tab-tryon-active.png"
+      },
+      {
+        "pagePath": "pages/profile/profile",
+        "text": "我的",
+        "iconPath": "images/tab-profile.png",
+        "selectedIconPath": "images/tab-profile-active.png"
+      }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

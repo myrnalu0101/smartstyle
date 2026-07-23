@@ -1,0 +1,66 @@
+<!--
+  个人页 — 简化版
+-->
+<view class="page-profile">
+  <!-- Header -->
+  <view class="profile-header">
+    <text class="profile-title">数字分身</text>
+    <text class="settings-emoji">⚙️</text>
+  </view>
+
+  <!-- Avatar Card -->
+  <view class="avatar-card">
+    <image src="https://picsum.photos/200/200?random=user" class="avatar-img" mode="aspectFill" />
+    <view>
+      <text class="avatar-name">Alexa Wang</text>
+      <text class="avatar-sub">时尚探索者 · {{stats.bodyShape}}</text>
+    </view>
+  </view>
+
+  <!-- Body Data -->
+  <view class="data-card">
+    <view class="data-title">
+      <text class="data-title-emoji">📏</text>
+      <text>身体数据</text>
+    </view>
+    <view class="data-grid">
+      <view class="data-item">
+        <text class="data-item-label">身高</text>
+        <text class="data-item-value">{{stats.height}} <text class="data-unit">cm</text></text>
+      </view>
+      <view class="data-item">
+        <text class="data-item-label">体重</text>
+        <text class="data-item-value">{{stats.weight}} <text class="data-unit">kg</text></text>
+      </view>
+      <view class="data-item">
+        <text class="data-item-label">体型</text>
+        <text class="data-item-value">{{stats.bodyShape}}</text>
+      </view>
+    </view>
+    <view class="rescan-btn"><text>重新扫描测量</text></view>
+  </view>
+
+  <!-- Insights -->
+  <view class="insights-card">
+    <view class="insights-title">
+      <text class="insights-title-emoji">📊</text>
+      <text>穿搭偏好分析</text>
+    </view>
+    <view class="insights-row">
+      <text class="insights-label">最爱风格</text>
+      <text class="insights-value">{{stats.topStyle}}</text>
+    </view>
+    <view class="insights-row">
+      <text class="insights-label">常用色系</text>
+      <view class="insights-color">
+        <view class="color-dot" style="background-color: {{colorMap[stats.mostWornColor] || '#ffffff'}}"></view>
+        <text class="insights-value">{{stats.mostWornColor}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- Logout -->
+  <view class="logout-btn" bindtap="handleLogout">
+    <text>退出登录</text>
+  </view>
+</view>

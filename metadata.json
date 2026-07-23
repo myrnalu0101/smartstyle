@@ -1,0 +1,8 @@
+{
+  "name": "智绘衣橱 (SmartStyle)",
+  "description": "基于 AIGC 的智能衣橱助手，提供数字化衣橱管理、AI 场景化穿搭建议及虚拟试衣体验。",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": []
+}

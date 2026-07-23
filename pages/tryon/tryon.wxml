@@ -1,0 +1,188 @@
+<!--
+  试衣间 — 简化版
+-->
+<view class="page-tryon">
+
+  <!-- STEP: CONFIG -->
+  <view wx:if="{{step === 'CONFIG'}}" class="config-view">
+    <text class="page-title">AI 试衣间</text>
+
+    <!-- Mode Switcher -->
+    <view class="mode-switch">
+      <view class="mode-item {{mode === 'SCENARIO' ? 'mode-active' : ''}}" bindtap="setMode" data-mode="SCENARIO">
+        <text class="mode-emoji">✨</text>
+        <text>智能场景</text>
+      </view>
+      <view class="mode-item {{mode === 'CUSTOM' ? 'mode-active' : ''}}" bindtap="setMode" data-mode="CUSTOM">
+        <text class="mode-emoji">🔀</text>
+        <text>自由混搭</text>
+      </view>
+      <view class="mode-item {{mode === 'PRE_BUY' ? 'mode-active accent' : ''}}" bindtap="setMode" data-mode="PRE_BUY">
+        <text class="mode-emoji">🛍️</text>
+        <text>试穿新品</text>
+      </view>
+    </view>
+
+    <scroll-view class="config-body" scroll-y="true">
+
+      <!-- Mode: SCENARIO -->
+      <view wx:if="{{mode === 'SCENARIO'}}" class="mode-panel">
+        <view class="section">
+          <text class="section-label">出行场景</text>
+          <view class="occasion-grid">
+            <view
+              wx:for="{{occasions}}"
+              wx:key="*this"
+              class="occasion-item {{selectedOccasion === item ? 'occasion-active' : ''}}"
+              bindtap="selectOccasion"
+              data-occasion="{{item}}"
+            >
+              <text>{{item}}</text>
+              <text wx:if="{{selectedOccasion === item}}" class="occasion-check">✨</text>
+            </view>
+          </view>
+        </view>
+
+        <view class="info-card blue">
+          <text class="info-emoji">ℹ️</text>
+          <view>
+            <text class="info-title">智能环境感知</text>
+            <text class="info-desc">坐标上海，今日{{weather.temp}}°C，{{weather.condition}}。AI 已为您排除不适合天气的单品。</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- Mode: CUSTOM -->
+      <view wx:if="{{mode === 'CUSTOM'}}" class="mode-panel">
+        <view class="info-card purple">
+          <text class="info-emoji">🪄</text>
+          <view>
+            <text class="info-title-purple">指定必选单品 ({{selectedCustomIds.length}}/3)</text>
+            <text class="info-desc-purple">选定您想穿的衣服，AI 会自动补全剩余搭配。</text>
+          </view>
+        </view>
+
+        <view class="items-grid-3">
+          <view
+            wx:for="{{ownedItems}}"
+            wx:key="id"
+            class="custom-item {{selectedCustomIds.indexOf(item.id) > -1 ? 'custom-selected' : ''}}"
+            bindtap="toggleCustom"
+            data-id="{{item.id}}"
+          >
+            <image src="{{item.imageUrl}}" class="custom-item-img" mode="aspectFill" lazy-load="true" />
+            <view wx:if="{{selectedCustomIds.indexOf(item.id) > -1}}" class="custom-check-badge">
+              <text>✓</text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- Mode: PRE_BUY -->
+      <view wx:if="{{mode === 'PRE_BUY'}}" class="mode-panel">
+        <view class="sub-tabs">
+          <view class="sub-tab {{preBuySource === 'WISHLIST' ? 'sub-tab-active' : ''}}" bindtap="setPreBuySource" data-source="WISHLIST">
+            <text>愿望单选款</text>
+            <view wx:if="{{preBuySource === 'WISHLIST'}}" class="sub-tab-line"></view>
+          </view>
+          <view class="sub-tab {{preBuySource === 'EXTERNAL' ? 'sub-tab-active' : ''}}" bindtap="setPreBuySource" data-source="EXTERNAL">
+            <text>外部录入</text>
+            <view wx:if="{{preBuySource === 'EXTERNAL'}}" class="sub-tab-line"></view>
+          </view>
+        </view>
+
+        <view wx:if="{{preBuySource === 'WISHLIST'}}" class="items-grid-2">
+          <block wx:if="{{wishlistItems.length > 0}}">
+            <view
+              wx:for="{{wishlistItems}}"
+              wx:key="id"
+              class="wishlist-item {{selectedWishlistId === item.id ? 'wishlist-selected' : ''}}"
+              bindtap="selectWishlist"
+              data-item="{{item}}"
+            >
+              <image src="{{item.imageUrl}}" class="wishlist-img" mode="aspectFill" lazy-load="true" />
+              <view class="wishlist-badge"><text>{{item.category}}</text></view>
+            </view>
+          </block>
+          <view wx:else class="empty-wishlist"><text>愿望单空空如也</text></view>
+        </view>
+
+        <view wx:if="{{preBuySource === 'EXTERNAL'}}" class="external-form">
+          <view class="form-row">
+            <text class="form-label">粘贴商品链接</text>
+            <view class="link-input-wrap">
+              <text class="link-emoji">🔗</text>
+              <input class="link-input" type="text" value="{{externalLink}}" placeholder="https://taobao.com/item..." bindinput="onLinkInput" />
+            </view>
+          </view>
+          <view class="or-divider">
+            <view class="or-line"></view>
+            <text>或者</text>
+            <view class="or-line"></view>
+          </view>
+          <view class="form-row">
+            <text class="form-label">上传图片截图</text>
+            <view class="upload-box" bindtap="chooseImage">
+              <image wx:if="{{externalImage}}" src="{{externalImage}}" class="upload-preview" mode="aspectFit" />
+              <view wx:else class="upload-placeholder">
+                <view class="upload-circle"><text class="upload-emoji">🖼️</text></view>
+                <text>点击上传或拖拽图片</text>
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+    </scroll-view>
+
+    <!-- Generate Button -->
+    <view class="gen-btn-wrap">
+      <view class="gen-btn {{canGenerate ? '' : 'gen-btn-disabled'}}" bindtap="handleGenerate">
+        <text class="gen-btn-emoji">✨</text>
+        <text>{{mode === 'PRE_BUY' ? '生成试穿评估' : '开始生成搭配'}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- STEP: GENERATING -->
+  <view wx:if="{{step === 'GENERATING'}}" class="generating-view">
+    <view class="gen-spinner">
+      <view class="gen-ring"></view>
+      <text class="gen-sparkle-emoji">✨</text>
+    </view>
+    <text class="gen-title">{{mode === 'PRE_BUY' ? '正在评估购买价值...' : 'AI 思考中'}}</text>
+    <text class="gen-text">{{loadingText}}</text>
+  </view>
+
+  <!-- STEP: RESULT -->
+  <view wx:if="{{step === 'RESULT'}}" class="result-view">
+    <view class="result-images">
+      <view wx:for="{{generatedOutfit.items}}" wx:key="id" class="result-img-wrap {{index === 0 ? 'result-main' : ''}}">
+        <image src="{{item.imageUrl}}" class="result-img" mode="aspectFill" />
+        <view wx:if="{{item.status === 'WISHLIST'}}" class="result-tag new-tag"><text>新品试穿</text></view>
+        <view wx:if="{{item.status === 'OWNED' && mode === 'CUSTOM' && selectedCustomIds.indexOf(item.id) > -1}}" class="result-tag lock-tag"><text>必选</text></view>
+      </view>
+    </view>
+    <view class="result-gradient"></view>
+
+    <view class="result-card">
+      <view class="result-header">
+        <view>
+          <text class="result-title">{{mode === 'PRE_BUY' ? '购买评估报告' : (mode === 'CUSTOM' ? '专属混搭方案' : selectedOccasion + '精选')}}</text>
+          <view class="result-score"><text>匹配度: {{generatedOutfit.score}}%</text></view>
+        </view>
+        <view class="apply-btn {{isApplied ? 'applied' : ''}}" bindtap="handleApply">
+          <text>{{isApplied ? '已穿上 ✓' : '今天穿这套 ✨'}}</text>
+        </view>
+      </view>
+      <text class="result-reasoning">{{generatedOutfit.reasoning}}</text>
+      <view class="result-actions">
+        <view class="retry-btn" bindtap="goBack">
+          <text>🔄 {{mode === 'PRE_BUY' ? '换一件搭配' : '重试'}}</text>
+        </view>
+        <view class="thumbsup-btn">
+          <text>👍</text>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,76 @@
+<!--
+  首页 — 简化版，移除图标依赖
+-->
+<view class="page-home">
+  <!-- Header: Greeting + Weather -->
+  <view class="header-row">
+    <view class="greeting">
+      <text class="greeting-title">早安, Alexa <text class="wave">👋</text></text>
+      <text class="greeting-sub">今天想穿成什么风格？</text>
+    </view>
+
+    <view class="weather-widget">
+      <text class="weather-emoji">☀️</text>
+      <text class="weather-temp">{{weather.temp}}°</text>
+      <text class="weather-divider">|</text>
+      <text class="weather-city">{{weather.city}}</text>
+    </view>
+  </view>
+
+  <!-- 2D Digital Twin (Avatar) Area -->
+  <view class="avatar-area">
+    <view class="blob blob-1"></view>
+    <view class="blob blob-2"></view>
+    <view class="blob blob-3"></view>
+
+    <view class="avatar-container">
+      <text class="avatar-placeholder">🧍</text>
+    </view>
+
+    <view class="ai-bubble">
+      <view class="bubble-content">
+        <text>今天试试法式复古风？👗</text>
+      </view>
+    </view>
+
+    <view class="cta-btn" bindtap="onTryOn">
+      <text class="cta-emoji">✨</text>
+      <text>一键生成今日 OOTD</text>
+    </view>
+  </view>
+
+  <!-- Quick Stats -->
+  <view class="stats-row">
+    <view class="stat-card">
+      <text class="stat-value">{{userStats.totalItems}}</text>
+      <text class="stat-label">全部衣物</text>
+    </view>
+    <view class="stat-card">
+      <text class="stat-value">85%</text>
+      <text class="stat-label">衣橱利用率</text>
+    </view>
+    <view class="stat-card">
+      <text class="stat-value accent">2</text>
+      <text class="stat-label">心愿单</text>
+    </view>
+  </view>
+
+  <!-- Feature Grid -->
+  <view class="feature-grid">
+    <view class="feature-card" bindtap="onWardrobe">
+      <view class="feature-icon-box green">
+        <text class="feature-emoji">📸</text>
+      </view>
+      <text class="feature-title">极速录入</text>
+      <text class="feature-desc">拍照/截图自动入库</text>
+    </view>
+
+    <view class="feature-card">
+      <view class="feature-icon-box orange">
+        <text class="feature-emoji">📦</text>
+      </view>
+      <text class="feature-title">旅行打包</text>
+      <text class="feature-desc">生成行李箱清单</text>
+    </view>
+  </view>
+</view>
