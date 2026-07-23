@@ -77,8 +77,10 @@
   background-color: #ffffff;
   border: 1px solid #e5e7eb;
   border-radius: 24rpx;
-  padding: 20rpx 20rpx 20rpx 80rpx;
-  font-size: 28rpx;
+  padding: 24rpx 24rpx 24rpx 80rpx;
+  font-size: 30rpx;
+  line-height: 1.5;
+  min-height: 88rpx;
   box-sizing: border-box;
 }
 
@@ -263,4 +265,119 @@
 
 .item-heart {
   font-size: 32rpx;
+}
+
+/* ===== 识图确认弹窗 ===== */
+.recognize-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48rpx;
+}
+
+.recognize-modal {
+  width: 100%;
+  max-width: 600rpx;
+  background: #ffffff;
+  border-radius: 32rpx;
+  padding: 32rpx;
+  box-sizing: border-box;
+}
+
+.recognize-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24rpx;
+}
+
+.recognize-title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #111827;
+}
+
+.recognize-close {
+  font-size: 40rpx;
+  color: #9ca3af;
+  padding: 0 12rpx;
+}
+
+.recognize-img {
+  width: 100%;
+  height: 400rpx;
+  background: #f9fafb;
+  border-radius: 20rpx;
+  margin-bottom: 24rpx;
+}
+
+.recognize-form {
+  margin-bottom: 24rpx;
+}
+
+.recognize-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20rpx;
+}
+
+.recognize-label {
+  width: 100rpx;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #6b7280;
+  flex-shrink: 0;
+}
+
+.recognize-input,
+.recognize-picker {
+  flex: 1;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 16rpx;
+  padding: 16rpx 20rpx;
+  font-size: 28rpx;
+  min-height: 64rpx;
+  box-sizing: border-box;
+  line-height: 1.4;
+}
+
+.recognize-picker {
+  color: #111827;
+}
+
+.recognize-actions {
+  display: flex;
+  gap: 20rpx;
+}
+
+.recognize-btn {
+  flex: 1;
+  font-size: 28rpx;
+  font-weight: 700;
+  border-radius: 24rpx;
+  padding: 20rpx 0;
+  border: none;
+  margin: 0;
+}
+
+.recognize-btn.cancel {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.recognize-btn.confirm {
+  background: #111827;
+  color: #ffffff;
+}
+
+.recognize-btn::after {
+  border: none;
 }

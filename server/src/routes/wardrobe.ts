@@ -5,6 +5,21 @@ import { authMiddleware, AuthRequest } from '../middleware/auth';
 
 export const wardrobeRouter = Router();
 
+// 把数据库行（snake_case）转成小程序/前端用的驼峰字段
+// image_url -> imageUrl, is_favorite -> isFavorite, wear_count -> wearCount, ...
+function toCamelRow(row: any): any {
+  if (!row) return row;
+  const out: any = {};
+  for (const key of Object.keys(row)) {
+    const camel = key.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+    out[camel] = row[key];
+  }
+  // tags 从 JSON 字符串解析；is_favorite 转 boolean
+  out.tags = JSON.parse(row.tags || '[]');
+  out.isFavorite = Boolean(row.is_favorite);
+  return out;
+}
+
 // All wardrobe routes require auth
 wardrobeRouter.use(authMiddleware);
 
@@ -34,12 +49,8 @@ wardrobeRouter.get('/', (req: AuthRequest, res: Response): void => {
 
   const items = all(sql, params);
 
-  // Parse tags from JSON string
-  const parsed = items.map((item: any) => ({
-    ...item,
-    tags: JSON.parse(item.tags || '[]'),
-    isFavorite: Boolean(item.is_favorite),
-  }));
+  // 统一转驼峰，供小程序直接用 imageUrl / isFavorite 等字段
+  const parsed = items.map((item: any) => toCamelRow(item));
 
   res.json(parsed);
 });
@@ -56,11 +67,7 @@ wardrobeRouter.get('/:id', (req: AuthRequest, res: Response): void => {
     return;
   }
 
-  res.json({
-    ...item,
-    tags: JSON.parse(item.tags || '[]'),
-    isFavorite: Boolean(item.is_favorite),
-  });
+  res.json(toCamelRow(item));
 });
 
 // POST /api/wardrobe — create item
@@ -84,11 +91,7 @@ wardrobeRouter.post('/', (req: AuthRequest, res: Response): void => {
 
   const created = get('SELECT * FROM clothing_items WHERE id = ?', [id]);
 
-  res.status(201).json({
-    ...created,
-    tags: JSON.parse(created.tags || '[]'),
-    isFavorite: Boolean(created.is_favorite),
-  });
+  res.status(201).json(toCamelRow(created));
 });
 
 // PUT /api/wardrobe/:id — update item
@@ -138,11 +141,7 @@ wardrobeRouter.put('/:id', (req: AuthRequest, res: Response): void => {
 
   const updated = get('SELECT * FROM clothing_items WHERE id = ?', [itemId]);
 
-  res.json({
-    ...updated,
-    tags: JSON.parse(updated.tags || '[]'),
-    isFavorite: Boolean(updated.is_favorite),
-  });
+  res.json(toCamelRow(updated));
 });
 
 // DELETE /api/wardrobe/:id — delete item

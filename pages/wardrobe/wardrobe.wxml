@@ -50,7 +50,7 @@
   <!-- Grid -->
   <scroll-view class="items-scroll" scroll-y="true">
     <view class="items-grid">
-      <view wx:if="{{activeTab === 'OWNED'}}" class="add-card add-owned">
+      <view wx:if="{{activeTab === 'OWNED'}}" class="add-card add-owned" bindtap="captureAdd">
         <view class="add-circle">
           <text class="add-plus">+</text>
         </view>
@@ -77,4 +77,42 @@
       </view>
     </view>
   </scroll-view>
+
+  <!-- 识图确认弹窗 -->
+  <view wx:if="{{recognizeVisible}}" class="recognize-mask">
+    <view class="recognize-modal">
+      <view class="recognize-header">
+        <text class="recognize-title">确认衣物信息</text>
+        <text class="recognize-close" bindtap="cancelRecognize">×</text>
+      </view>
+
+      <image wx:if="{{pendingImageUrl}}" class="recognize-img" src="{{pendingImageUrl}}" mode="aspectFit" />
+
+      <view class="recognize-form">
+        <view class="recognize-row">
+          <text class="recognize-label">分类</text>
+          <picker bindchange="onPendingCategoryChange" value="0" range="{{['上装','下装','连衣裙','外套','鞋履','配饰']}}">
+            <view class="recognize-picker">{{pendingItem.category}}</view>
+          </picker>
+        </view>
+        <view class="recognize-row">
+          <text class="recognize-label">颜色</text>
+          <input class="recognize-input" value="{{pendingItem.color}}" data-field="color" bindinput="onPendingInput" placeholder="主颜色" />
+        </view>
+        <view class="recognize-row">
+          <text class="recognize-label">品牌</text>
+          <input class="recognize-input" value="{{pendingItem.brand}}" data-field="brand" bindinput="onPendingInput" placeholder="可选" />
+        </view>
+        <view class="recognize-row">
+          <text class="recognize-label">标签</text>
+          <input class="recognize-input" value="{{pendingTagsText}}" bindinput="onPendingTagsInput" placeholder="顿号分隔，如 休闲、棉质" />
+        </view>
+      </view>
+
+      <view class="recognize-actions">
+        <button class="recognize-btn cancel" bindtap="cancelRecognize">取消</button>
+        <button class="recognize-btn confirm" bindtap="confirmRecognize">保存</button>
+      </view>
+    </view>
+  </view>
 </view>

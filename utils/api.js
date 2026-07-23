@@ -38,11 +38,6 @@ function apiRequest(path, options = {}) {
       options.body = JSON.stringify(options.body);
     }
 
-    // 如果是 FormData，不设置 Content-Type
-    if (options.body instanceof wx.FileSystemManager) {
-      delete header['Content-Type'];
-    }
-
     wx.request({
       url: API_BASE + path,
       method: options.method || 'GET',
@@ -166,6 +161,17 @@ const profileAPI = {
   }
 };
 
+// ---- AI API ----
+const aiAPI = {
+  // 识图：传已上传图片的完整 URL，返回 { category, color, brand, season, tags }
+  recognize(imageUrl) {
+    return apiRequest('/ai/recognize', {
+      method: 'POST',
+      body: { imageUrl }
+    });
+  }
+};
+
 module.exports = {
   setToken,
   clearToken,
@@ -173,5 +179,6 @@ module.exports = {
   authAPI,
   wardrobeAPI,
   uploadAPI,
-  profileAPI
+  profileAPI,
+  aiAPI
 };

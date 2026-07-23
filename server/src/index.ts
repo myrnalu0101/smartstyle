@@ -13,6 +13,7 @@ import { authRouter } from './routes/auth';
 import { wardrobeRouter } from './routes/wardrobe';
 import { uploadRouter } from './routes/upload';
 import { profileRouter } from './routes/profile';
+import { aiRouter } from './routes/ai';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -36,6 +37,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/wardrobe', wardrobeRouter);
 app.use('/api/upload', uploadRouter);
 app.use('/api/profile', profileRouter);
+app.use('/api/ai', aiRouter);
 
 // Health check
 app.get('/api/health', (_req, res) => {
