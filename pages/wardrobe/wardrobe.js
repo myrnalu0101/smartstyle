@@ -16,6 +16,7 @@ Page({
     // 识图确认弹窗
     recognizeVisible: false,
     recognizing: false,
+    editingId: null,
     pendingImageUrl: '',
     pendingDisplayUrl: '',
     // 多件选择弹窗
@@ -163,6 +164,7 @@ Page({
     wx.showLoading({ title: '加载中...', mask: true });
     this.setData({
       recognizeVisible: true,
+      editingId: null,
       pendingImageUrl: cutoutUrl,
       pendingDisplayUrl: cutoutUrl,
       pendingItem: item,
@@ -177,6 +179,28 @@ Page({
     } else {
       wx.hideLoading();
     }
+  },
+
+  // 点击已保存的单品 → 进入编辑（复用确认弹窗，回填数据）
+  onItemTap(e) {
+    const id = e.currentTarget.dataset.id;
+    const item = this.data.items.find(it => it.id === id);
+    if (!item) return;
+    const tags = Array.isArray(item.tags) ? item.tags : [];
+    this.setData({
+      recognizeVisible: true,
+      editingId: id,
+      pendingImageUrl: item.imageUrl,
+      pendingDisplayUrl: item.imageUrl,
+      pendingItem: {
+        category: item.category || '上装',
+        color: item.color || '白色',
+        brand: item.brand || '',
+        season: item.season || '四季',
+        tags
+      },
+      pendingTagsText: tags.join('、')
+    });
   },
 
   // 根据衣物名称关键词猜测分类，识别不到默认上装
@@ -210,12 +234,12 @@ Page({
 
   // 取消录入：丢弃已上传的图（后端无删除接口，仅前端不保存记录）
   cancelRecognize() {
-    this.setData({ recognizeVisible: false, pendingImageUrl: '', pendingDisplayUrl: '', pendingTagsText: '' });
+    this.setData({ recognizeVisible: false, editingId: null, pendingImageUrl: '', pendingDisplayUrl: '', pendingTagsText: '' });
   },
 
-  // 确认保存
+  // 确认保存（editingId 有值走更新，否则新建）
   confirmRecognize() {
-    const { pendingImageUrl, pendingItem, pendingTagsText } = this.data;
+    const { pendingImageUrl, pendingItem, pendingTagsText, editingId } = this.data;
     if (!pendingImageUrl) {
       wx.showToast({ title: '图片丢失', icon: 'none' });
       return;
@@ -227,20 +251,25 @@ Page({
       .filter(Boolean)
       .slice(0, 5);
 
-    wx.showLoading({ title: '保存中...', mask: true });
-    api.wardrobeAPI.create({
+    const payload = {
       imageUrl: pendingImageUrl,
       category: pendingItem.category,
       tags,
       color: pendingItem.color || '白色',
       brand: pendingItem.brand || null,
-      season: pendingItem.season || '四季',
-      status: ItemStatus.OWNED
-    })
+      season: pendingItem.season || '四季'
+    };
+    if (!editingId) payload.status = ItemStatus.OWNED;
+
+    wx.showLoading({ title: '保存中...', mask: true });
+    const savePromise = editingId
+      ? api.wardrobeAPI.update(editingId, payload)
+      : api.wardrobeAPI.create(payload);
+    savePromise
       .then(() => {
         wx.hideLoading();
-        this.setData({ recognizeVisible: false, pendingImageUrl: '', pendingDisplayUrl: '', pendingTagsText: '' });
-        wx.showToast({ title: '已保存', icon: 'success' });
+        this.setData({ recognizeVisible: false, editingId: null, pendingImageUrl: '', pendingDisplayUrl: '', pendingTagsText: '' });
+        wx.showToast({ title: editingId ? '已更新' : '已保存', icon: 'success' });
         this.loadWardrobe();
       })
       .catch(err => {

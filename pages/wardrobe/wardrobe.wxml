@@ -65,14 +65,14 @@
         <text class="add-sub-wishlist">自动识别网图</text>
       </view>
 
-      <view wx:for="{{filteredItems}}" wx:key="id" class="item-card">
+      <view wx:for="{{filteredItems}}" wx:key="id" class="item-card" bindtap="onItemTap" data-id="{{item.id}}">
         <image src="{{item.imageUrl}}" class="item-image" mode="aspectFill" lazy-load="true" />
         <view class="item-badge">
           <text>{{item.category}}</text>
         </view>
         <view class="item-actions">
           <text class="item-tag">{{item.tags[0]}}</text>
-          <text class="item-heart">♡</text>
+          <text class="item-heart">✎</text>
         </view>
       </view>
     </view>
@@ -104,7 +104,7 @@
   <view wx:if="{{recognizeVisible}}" class="recognize-mask">
     <view class="recognize-modal">
       <view class="recognize-header">
-        <text class="recognize-title">确认衣物信息</text>
+        <text class="recognize-title">{{editingId ? '编辑衣物' : '确认衣物信息'}}</text>
         <text class="recognize-close" bindtap="cancelRecognize">×</text>
       </view>
 
