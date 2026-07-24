@@ -524,3 +524,101 @@ aiRouter.post('/recognize', (req: AuthRequest, res: Response): void => {
       res.json({ ...FALLBACK_RECOG, recognized: false });
     });
 });
+
+// ----------------------------------------------------------------
+// POST /api/ai/outfit — 搭配推荐（豆包文本模型，纯文本无图块）
+// 入参 { wardrobe:[{id,category,color,tags,season}], occasion, weather, temperature, userStyle, lockedItemIds }
+// 返回 { selectedItemIds:[id...], score, reasoning }
+// 全程不抛 500：模型失败兜底返回空选中，前端 doubao.js 会再走 fallbackOutfit
+// ----------------------------------------------------------------
+aiRouter.post('/outfit', async (req: AuthRequest, res: Response): Promise<void> => {
+  const wardrobe: any[] = Array.isArray(req.body?.wardrobe) ? req.body.wardrobe : [];
+  const occasion = String(req.body?.occasion || '').trim();
+  const weather = String(req.body?.weather || '').trim();
+  const temperature = req.body?.temperature;
+  const userStyle = String(req.body?.userStyle || '').trim();
+  const lockedItemIds: string[] = Array.isArray(req.body?.lockedItemIds) ? req.body.lockedItemIds : [];
+
+  // 衣橱空 → 直接兜底
+  if (!wardrobe.length) {
+    res.json({ selectedItemIds: [], score: 60, reasoning: '衣橱里还没有衣物，先去录入几件吧' });
+    return;
+  }
+  // 无 token → 兜底（让前端走本地 fallback）
+  if (!AUTH_TOKEN) {
+    res.json({ selectedItemIds: [], score: 50, reasoning: 'AI 未配置，已为您随机搭配' });
+    return;
+  }
+
+  // 合法 id 集合（用于防幻觉交集）
+  const validIds = new Set(wardrobe.map((i) => String(i.id)).filter(Boolean));
+  // lockedItemIds 只保留真实存在的
+  const lockedValid = lockedItemIds.map(String).filter((id) => validIds.has(id));
+
+  // 精简衣橱清单：每件只取关键属性，不带 imageUrl（模型不看图，省 token）
+  const lines = wardrobe.map((i) => {
+    const tags = Array.isArray(i.tags) ? i.tags.slice(0, 2).join(',') : '';
+    return `id=${i.id} 类别=${i.category || ''} 颜色=${i.color || ''} 标签=${tags} 季节=${i.season || ''}`;
+  });
+
+  const systemPrompt =
+    '你是专业穿搭顾问。根据用户的衣橱清单挑出单品组成一套完整搭配（一般包含上装+下装+鞋，或连衣裙+鞋，可加外套/配饰）。' +
+    (occasion ? `场景：${occasion}。` : '') +
+    (weather || temperature !== undefined ? `天气：${weather || '未知'}${temperature !== undefined ? `，约${temperature}°C` : ''}。` : '') +
+    (userStyle ? `用户风格偏好：${userStyle}。` : '') +
+    (lockedValid.length ? `必须包含这些单品：${lockedValid.join(',')}。` : '') +
+    '只返回 JSON，不要任何解释或 markdown：{"selectedItemIds":["id1","id2"],"score":0到100的整数,"reasoning":"一句话说明搭配思路"}。selectedItemIds 必须是清单里真实存在的 id。';
+
+  const userText = '我的衣橱清单：\n' + lines.join('\n') + '\n\n请为我搭配一套。';
+
+  const body = {
+    model: MODEL,
+    max_tokens: 1024,
+    system: systemPrompt,
+    messages: [{ role: 'user', content: [{ type: 'text', text: userText }] }],
+  };
+
+  try {
+    const r = await fetch(`${BASE_URL}/v1/messages`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': AUTH_TOKEN,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) {
+      const t = await r.text().catch(() => '');
+      console.error('[AI] outfit HTTP', r.status, t.slice(0, 300));
+      res.json({ selectedItemIds: [], score: 50, reasoning: 'AI 暂时开小差了，已为您随机搭配' });
+      return;
+    }
+    const data: any = await r.json();
+    const blocks = Array.isArray(data?.content) ? data.content : [];
+    const content = blocks
+      .map((b: any) => {
+        if (!b) return '';
+        if (typeof b.thinking === 'string') return b.thinking;
+        if (typeof b.text === 'string') return b.text;
+        return '';
+      })
+      .join('')
+      .trim();
+    const parsed = extractJson(content);
+
+    // 防幻觉：只保留真实存在的 id
+    let selectedRaw: any[] = Array.isArray(parsed?.selectedItemIds) ? parsed.selectedItemIds : [];
+    let selected = selectedRaw.map(String).filter((id) => validIds.has(id));
+    // 确保必选件在内
+    for (const id of lockedValid) {
+      if (!selected.includes(id)) selected.push(id);
+    }
+    const score = Number.isFinite(Number(parsed?.score)) ? Math.round(Number(parsed.score)) : 85;
+    const reasoning = String(parsed?.reasoning || '根据您的要求为您搭配').slice(0, 300);
+    res.json({ selectedItemIds: selected, score, reasoning });
+  } catch (err: any) {
+    console.error('[AI] 搭配失败:', err?.message || err);
+    res.json({ selectedItemIds: [], score: 50, reasoning: 'AI 暂时开小差了，已为您随机搭配' });
+  }
+});
