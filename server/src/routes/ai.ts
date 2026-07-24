@@ -93,6 +93,7 @@ function normalizeCategory(raw: string): string {
 // ----------------------------------------------------------------
 // POST /api/ai/detect — 视觉模型出框，按框裁剪出每件衣物，供用户多选
 // 入参 { imageUrl } → 返回 { items: [{ cropUrl, type }] }
+// 流程：先整图抠出衣物（去人去背景）→ 在抠图上检测出框 → 按框裁出每件（已是干净单件）
 // 失败回退单件（原图），不阻断录入流程
 // ----------------------------------------------------------------
 aiRouter.post('/detect', async (req: AuthRequest, res: Response): Promise<void> => {
@@ -119,13 +120,34 @@ aiRouter.post('/detect', async (req: AuthRequest, res: Response): Promise<void> 
 
   try {
     const { Jimp } = require('jimp');
-    const img = await Jimp.read(localPath);
-    const W = img.width;
-    const H = img.height;
 
-    // base64 喂给视觉模型，让它输出每个物体的归一化边界框
-    const mediaType = mediaTypeFromExt(filename);
-    const b64 = fs.readFileSync(localPath).toString('base64');
+    // 1. 先整图抠图：SegmentCloth 抠出衣物（去人去背景，尺寸不变）→ remove.bg 兜底 → 原图
+    //    抠图用 base64 喂检测，box 相对抠图；尺寸不变故与原图对齐
+    let cutoutBuf: Buffer = fs.readFileSync(localPath);
+    let segmented = false;
+    try {
+      const segBuf = await segmentCloth(localPath);
+      if (segBuf) { cutoutBuf = segBuf; segmented = true; }
+    } catch (e: any) {
+      console.error('[AI] SegmentCloth 失败，尝试 remove.bg:', e?.message || e);
+    }
+    if (!segmented && REMOVEBG_API_KEY) {
+      try {
+        const rbBuf = await removeBackgroundByUrl(imageUrl);
+        if (rbBuf) { cutoutBuf = rbBuf; segmented = true; }
+      } catch (e: any) {
+        console.error('[AI] remove.bg 失败:', e?.message || e);
+      }
+    }
+
+    // 抠图尺寸（用于 box 归一化→像素）
+    const cut = await Jimp.read(cutoutBuf);
+    const W = cut.width;
+    const H = cut.height;
+
+    // 2. 在抠图上检测出框（只看到衣物，框更准）
+    const mediaType = 'image/png';
+    const b64 = cutoutBuf.toString('base64');
     const prompt =
       '识别图中每件独立的衣物（上衣/下装/外套/裙/鞋/包/帽/配饰等）。' +
       '返回 JSON 数组，每项含 name(中文) 和 box(归一化坐标 0~1，格式 [x_min,y_min,x_max,y_max])。' +
@@ -163,7 +185,7 @@ aiRouter.post('/detect', async (req: AuthRequest, res: Response): Promise<void> 
     const parsed = extractJson(content);
     const rawItems: any[] = Array.isArray(parsed) ? parsed : parsed?.items || [];
 
-    // 算每个框的归一化面积占比，并按面积降序
+    // 3. 算每个框的归一化面积占比，按面积降序；丢掉边角小件只留主体
     const candidates = rawItems
       .map((it) => {
         const box = Array.isArray(it?.box) ? it.box : null;
@@ -182,17 +204,16 @@ aiRouter.post('/detect', async (req: AuthRequest, res: Response): Promise<void> 
           nyMax: Math.max(nyMin, nyMax),
           wN,
           hN,
-          area: wN * hN, // 归一化面积 0~1
+          area: wN * hN,
         };
       })
       .filter((c): c is NonNullable<typeof c> => !!c && c.wN >= 0.05 && c.hN >= 0.05)
       .sort((a, b) => b.area - a.area);
 
-    // 只保留主体衣物：丢掉面积不足最大件 1/4 的边角小件
     const maxArea = candidates[0]?.area || 0;
     const kept = candidates.filter((c) => c.area >= maxArea * 0.25);
 
-    // 归一化坐标 → 像素，裁剪每件
+    // 4. 按框从抠图裁出每件（已是干净单件：去人去背景），存为最终 cropUrl
     const items: any[] = [];
     for (const c of kept) {
       let x = Math.round(c.nxMin * W);
@@ -205,7 +226,7 @@ aiRouter.post('/detect', async (req: AuthRequest, res: Response): Promise<void> 
       w = Math.min(w, W - x);
       h = Math.min(h, H - y);
       if (w < 12 || h < 12) continue;
-      const cropImg = await Jimp.read(localPath);
+      const cropImg = await Jimp.read(cutoutBuf);
       cropImg.crop({ x, y, w, h });
       const buf = await cropImg.getBuffer('image/png');
       const newFile = `crop-${uuidv4()}.png`;
@@ -213,18 +234,12 @@ aiRouter.post('/detect', async (req: AuthRequest, res: Response): Promise<void> 
       items.push({
         cropUrl: `${req.protocol}://${req.get('host')}/uploads/${newFile}`,
         type: String(c.it.name || '').trim(),
-        // 归一化框（相对原图），选择后回传给 /segment，从整图抠图里裁这一件
-        box: [
-          Number(c.nxMin.toFixed(4)),
-          Number(c.nyMin.toFixed(4)),
-          Number(c.nxMax.toFixed(4)),
-          Number(c.nyMax.toFixed(4)),
-        ],
+        segmented,
       });
     }
 
     if (!items.length) {
-      res.json({ items: [{ cropUrl: imageUrl, type: '' }] });
+      res.json({ items: [{ cropUrl: imageUrl, type: '', segmented: false }] });
       return;
     }
     res.json({ items });
@@ -237,6 +252,51 @@ aiRouter.post('/detect', async (req: AuthRequest, res: Response): Promise<void> 
 function clamp01(v: number): number {
   if (!Number.isFinite(v)) return 0;
   return Math.max(0, Math.min(1, v));
+}
+
+// 阿里云 SegmentCloth：整图抠出衣物（去人去背景），返回 PNG Buffer（尺寸同原图）
+// 失败返回 null
+async function segmentCloth(localPath: string): Promise<Buffer | null> {
+  if (!ALI_ACCESS_KEY_ID || !ALI_ACCESS_KEY_SECRET) return null;
+  const aliMod: any = require('@alicloud/imageseg20191230');
+  const Client = aliMod.default;
+  const { Config } = require('@alicloud/openapi-client');
+  const { RuntimeOptions } = require('@alicloud/tea-util');
+  const config = new Config({
+    accessKeyId: ALI_ACCESS_KEY_ID,
+    accessKeySecret: ALI_ACCESS_KEY_SECRET,
+    endpoint: 'imageseg.cn-shanghai.aliyuncs.com',
+  });
+  const client = new Client(config);
+  const segReq = new aliMod.SegmentClothAdvanceRequest({
+    imageURLObject: fs.createReadStream(localPath),
+  });
+  const runtime = new RuntimeOptions({ readTimeout: 60000, connectTimeout: 30000 });
+  const resp = await client.segmentClothAdvance(segReq, runtime);
+  const elements = (resp?.body?.data?.elements as any[]) || [];
+  const cutUrl: string = elements[0]?.imageURL;
+  if (!cutUrl || !cutUrl.startsWith('http')) return null;
+  const imgResp = await fetch(cutUrl);
+  return Buffer.from(await imgResp.arrayBuffer());
+}
+
+// remove.bg：去背景（注意人会留下，仅作 SegmentCloth 失败兜底）
+async function removeBackgroundByUrl(imageUrl: string): Promise<Buffer | null> {
+  if (!REMOVEBG_API_KEY) return null;
+  const form = new FormData();
+  form.append('image_url', imageUrl);
+  form.append('size', 'auto');
+  const rbResp = await fetch('https://api.remove.bg/v1.0/removebg', {
+    method: 'POST',
+    headers: { 'X-API-Key': REMOVEBG_API_KEY },
+    body: form,
+  });
+  if (!rbResp.ok) {
+    const t = await rbResp.text().catch(() => '');
+    console.error('[AI] remove.bg HTTP', rbResp.status, t.slice(0, 300));
+    return null;
+  }
+  return Buffer.from(await rbResp.arrayBuffer());
 }
 
 // ----------------------------------------------------------------

@@ -21,7 +21,6 @@ Page({
     // 多件选择弹窗
     detectVisible: false,
     detectItems: [],
-    pendingOriginalUrl: '',
     pendingItem: {
       category: '上装',
       color: '白色',
@@ -104,27 +103,25 @@ Page({
     });
   },
 
-  // 上传图片 → 物体检测 → 单件直接抠图 / 多件弹选择框
+  // 上传图片 → 整图抠衣物 → 检测出框 → 裁出每件（已是干净单件）
+  // 单件直接进确认框；多件弹选择框，用户挑一件
   uploadAndRecognize(filePath) {
     wx.showLoading({ title: '上传中...', mask: true });
     api.uploadAPI.upload(filePath)
       .then(uploadRes => {
-        const imageUrl = uploadRes.url;
-        wx.showLoading({ title: '检测中...', mask: true });
-        return api.aiAPI.detect(imageUrl).then(d => ({ imageUrl, items: (d && d.items) || [] }));
+        wx.showLoading({ title: '抠图检测中...', mask: true });
+        return api.aiAPI.detect(uploadRes.url);
       })
-      .then(({ imageUrl, items }) => {
+      .then(d => {
         wx.hideLoading();
-        // 记下原图，多件选择后回传给抠图
-        this.setData({ pendingOriginalUrl: imageUrl });
-        // 0 件：整图无 box 抠图
+        const items = (d && d.items) || [];
         if (!items.length) {
-          this.proceedToSegment(imageUrl, null);
+          wx.showToast({ title: '未识别到衣物', icon: 'none' });
           return;
         }
-        // 1 件：带该件 box 整图抠图后裁剪
+        // 1 件：直接进确认框
         if (items.length === 1) {
-          this.proceedToSegment(imageUrl, items[0].box || null);
+          this.showRecognize(items[0].cropUrl);
           return;
         }
         // 多件：弹出选择框，让用户挑一件
@@ -141,36 +138,28 @@ Page({
   pickDetectItem(e) {
     const idx = e.currentTarget.dataset.idx;
     const picked = this.data.detectItems[idx] || {};
-    const box = picked.box || null;
     this.setData({ detectVisible: false, detectItems: [] });
-    // 多件：把原始上传图 + 该件框 传给抠图（整图抠图后裁这一件）
-    this.proceedToSegment(this.data.pendingOriginalUrl, box);
+    if (picked.cropUrl) this.showRecognize(picked.cropUrl);
   },
 
   // 取消多件选择
   cancelDetect() {
-    this.setData({ detectVisible: false, detectItems: [], pendingOriginalUrl: '' });
+    this.setData({ detectVisible: false, detectItems: [] });
   },
 
-  // 对选定的图片抠图，然后弹出确认框
-  // imageUrl: 原始上传图；box: 选定件的归一化框（可选），传时整图抠图后裁该件
-  proceedToSegment(imageUrl, box) {
-    wx.showLoading({ title: '抠图中...', mask: true });
-    api.aiAPI.segment(imageUrl, box)
-      .then(seg => {
-        // 抠图成功用 cutoutUrl，失败退回原图
-        const cutoutUrl = (seg && seg.segmented && seg.cutoutUrl) ? seg.cutoutUrl : imageUrl;
-        const item = {
-          category: '上装',
-          color: '白色',
-          brand: '',
-          season: '四季',
-          tags: []
-        };
-        wx.showLoading({ title: '加载中...', mask: true });
-        this.setData({
-          recognizeVisible: true,
-          pendingImageUrl: cutoutUrl,
+  // 展示确认框（cutoutUrl 已是抠图+裁剪后的干净单件）
+  showRecognize(cutoutUrl) {
+    const item = {
+      category: '上装',
+      color: '白色',
+      brand: '',
+      season: '四季',
+      tags: []
+    };
+    wx.showLoading({ title: '加载中...', mask: true });
+    this.setData({
+      recognizeVisible: true,
+      pendingImageUrl: cutoutUrl,
           pendingDisplayUrl: cutoutUrl,
           pendingItem: item,
           pendingTagsText: ''
