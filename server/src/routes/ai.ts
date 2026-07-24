@@ -97,10 +97,11 @@ aiRouter.post('/segment', async (req: AuthRequest, res: Response): Promise<void>
   }
 
   try {
-    // 动态 import 阿里云 SDK（避免没装时整个服务起不来）
-    const Client = (await import('@alicloud/imageseg20191230')).default;
-    const Config = (await import('@alicloud/openapi-client')).Config;
-    const RuntimeOptions = (await import('@alicloud/tea-util')).RuntimeOptions;
+    // 动态 require 阿里云 SDK（default export 才是 Client 构造器）
+    const aliMod: any = require('@alicloud/imageseg20191230');
+    const Client = aliMod.default;
+    const { Config } = require('@alicloud/openapi-client');
+    const { RuntimeOptions } = require('@alicloud/tea-util');
 
     const config = new Config({
       accessKeyId: ALI_ACCESS_KEY_ID,
@@ -109,11 +110,10 @@ aiRouter.post('/segment', async (req: AuthRequest, res: Response): Promise<void>
     });
     const client = new Client(config);
 
-    const segReq = new (await import('@alicloud/imageseg20191230')).SegmentCommonImageRequest({
-      imageURL: imageUrl,
-    });
+    // 用服装分割（SegmentCloth），比通用分割更贴合"抠出衣服主体"
+    const segReq = new aliMod.SegmentClothRequest({ imageURL: imageUrl });
     const runtime = new RuntimeOptions({ readTimeout: 60000, connectTimeout: 30000 });
-    const resp = await client.segmentCommonImageWithOptions(segReq, runtime);
+    const resp = await client.segmentClothWithOptions(segReq, runtime);
 
     // 返回结构：data.elements[0].imageURL (http 开头) 或 base64
     const elements = (resp?.body?.data?.elements as any[]) || [];
