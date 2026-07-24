@@ -65,7 +65,14 @@
         <text class="add-sub-wishlist">自动识别网图</text>
       </view>
 
-      <view wx:for="{{filteredItems}}" wx:key="id" class="item-card" bindtap="onItemTap" data-id="{{item.id}}">
+      <view
+        wx:for="{{filteredItems}}"
+        wx:key="id"
+        class="item-card {{multiSelectMode && selectedMap[item.id] ? 'item-selected' : ''}}"
+        bindtap="onItemTap"
+        bindlongpress="onItemLongPress"
+        data-id="{{item.id}}"
+      >
         <image src="{{item.imageUrl}}" class="item-image" mode="aspectFill" lazy-load="true" />
         <view class="item-badge">
           <text>{{item.category}}</text>
@@ -74,9 +81,21 @@
           <text class="item-tag">{{item.tags[0]}}</text>
           <text class="item-heart">✎</text>
         </view>
+        <view wx:if="{{multiSelectMode}}" class="item-check {{selectedMap[item.id] ? 'checked' : ''}}">
+          <text wx:if="{{selectedMap[item.id]}}">✓</text>
+        </view>
       </view>
     </view>
   </scroll-view>
+
+  <!-- 多选删除操作条 -->
+  <view wx:if="{{multiSelectMode}}" class="multi-bar">
+    <view class="multi-bar-btn" bindtap="exitMultiSelect">取消</view>
+    <view class="multi-bar-btn" bindtap="toggleSelectAll">
+      <text>{{allSelected ? '取消全选' : '全选'}}</text>
+    </view>
+    <view class="multi-bar-btn danger" bindtap="deleteSelected">删除({{selectedCount}})</view>
+  </view>
 
   <!-- 多件选择弹窗 -->
   <view wx:if="{{detectVisible}}" class="recognize-mask">

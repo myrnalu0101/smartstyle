@@ -22,6 +22,11 @@ Page({
     // 多件选择弹窗
     detectVisible: false,
     detectItems: [],
+    // 多选删除
+    multiSelectMode: false,
+    selectedMap: {},
+    selectedCount: 0,
+    allSelected: false,
     pendingItem: {
       category: '上装',
       color: '白色',
@@ -181,9 +186,27 @@ Page({
     }
   },
 
-  // 点击已保存的单品 → 进入编辑（复用确认弹窗，回填数据）
+  // 长按单品 → 进入多选模式并选中当前件
+  onItemLongPress(e) {
+    const id = e.currentTarget.dataset.id;
+    if (!id) return;
+    wx.vibrateShort && wx.vibrateShort({ type: 'medium' });
+    const selectedMap = { [id]: true };
+    this.setData({
+      multiSelectMode: true,
+      selectedMap,
+      selectedCount: 1,
+      allSelected: this.data.filteredItems.length === 1
+    });
+  },
+
+  // 点击已保存的单品：多选模式下切换勾选，否则进入编辑
   onItemTap(e) {
     const id = e.currentTarget.dataset.id;
+    if (this.data.multiSelectMode) {
+      this.toggleSelect(id);
+      return;
+    }
     const item = this.data.items.find(it => it.id === id);
     if (!item) return;
     const tags = Array.isArray(item.tags) ? item.tags : [];
@@ -200,6 +223,74 @@ Page({
         tags
       },
       pendingTagsText: tags.join('、')
+    });
+  },
+
+  // 切换单个选中
+  toggleSelect(id) {
+    const selectedMap = Object.assign({}, this.data.selectedMap);
+    if (selectedMap[id]) {
+      delete selectedMap[id];
+    } else {
+      selectedMap[id] = true;
+    }
+    this.applySelectState(selectedMap);
+  },
+
+  // 全选/取消全选
+  toggleSelectAll() {
+    const { filteredItems, allSelected } = this.data;
+    if (allSelected) {
+      this.applySelectState({});
+      return;
+    }
+    const selectedMap = {};
+    filteredItems.forEach(it => { selectedMap[it.id] = true; });
+    this.applySelectState(selectedMap);
+  },
+
+  // 根据 selectedMap 同步计数与全选态
+  applySelectState(selectedMap) {
+    const count = Object.keys(selectedMap).filter(k => selectedMap[k]).length;
+    this.setData({
+      selectedMap,
+      selectedCount: count,
+      allSelected: count > 0 && count === this.data.filteredItems.length
+    });
+  },
+
+  // 退出多选模式
+  exitMultiSelect() {
+    this.setData({ multiSelectMode: false, selectedMap: {}, selectedCount: 0, allSelected: false });
+  },
+
+  // 删除所选单品
+  deleteSelected() {
+    const ids = Object.keys(this.data.selectedMap).filter(k => this.data.selectedMap[k]);
+    if (!ids.length) {
+      wx.showToast({ title: '未选择', icon: 'none' });
+      return;
+    }
+    wx.showModal({
+      title: '删除确认',
+      content: `确定删除选中的 ${ids.length} 件衣物？`,
+      confirmColor: '#ef4444',
+      success: (m) => {
+        if (!m.confirm) return;
+        wx.showLoading({ title: '删除中...', mask: true });
+        Promise.all(ids.map(id => api.wardrobeAPI.delete(id)))
+          .then(() => {
+            wx.hideLoading();
+            wx.showToast({ title: '已删除', icon: 'success' });
+            this.exitMultiSelect();
+            this.loadWardrobe();
+          })
+          .catch(err => {
+            wx.hideLoading();
+            console.error('[Wardrobe] 删除失败:', err);
+            wx.showToast({ title: err.message || '删除失败', icon: 'none' });
+          });
+      }
     });
   },
 
