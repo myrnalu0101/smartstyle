@@ -110,9 +110,8 @@ Page({
         return api.aiAPI.segment(imageUrl).then(seg => ({ imageUrl, seg }));
       })
       .then(({ imageUrl, seg }) => {
-        wx.hideLoading();
-        // 展示抠好的图（抠图失败则退回原图）
-        const displayUrl = (seg && seg.cutoutUrl) ? seg.cutoutUrl : imageUrl;
+        // 抠好的图：抠图成功用 cutoutUrl，失败退回原图
+        const cutoutUrl = (seg && seg.segmented && seg.cutoutUrl) ? seg.cutoutUrl : imageUrl;
         const item = {
           category: '上装',
           color: '白色',
@@ -120,13 +119,25 @@ Page({
           season: '四季',
           tags: []
         };
+        // 先用 loading 挡住，避免大图加载时界面卡顿
+        wx.showLoading({ title: '加载中...', mask: true });
         this.setData({
           recognizeVisible: true,
-          pendingImageUrl: seg && seg.segmented ? imageUrl : displayUrl,
-          pendingDisplayUrl: displayUrl,
+          pendingImageUrl: cutoutUrl,
+          pendingDisplayUrl: cutoutUrl,
           pendingItem: item,
           pendingTagsText: ''
         });
+        // 预加载图片，加载完再隐藏 loading
+        if (wx.getImageInfo) {
+          wx.getImageInfo({
+            src: cutoutUrl,
+            success: () => wx.hideLoading(),
+            fail: () => wx.hideLoading()
+          });
+        } else {
+          wx.hideLoading();
+        }
         if (!seg || !seg.segmented) {
           wx.showToast({ title: '抠图不可用，使用原图', icon: 'none' });
         }
