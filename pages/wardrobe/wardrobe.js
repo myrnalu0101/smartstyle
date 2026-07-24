@@ -119,9 +119,9 @@ Page({
           wx.showToast({ title: '未识别到衣物', icon: 'none' });
           return;
         }
-        // 1 件：直接进确认框
+        // 1 件：直接进确认框（带名称）
         if (items.length === 1) {
-          this.showRecognize(items[0].cropUrl);
+          this.showRecognize(items[0].cropUrl, items[0].type);
           return;
         }
         // 多件：弹出选择框，让用户挑一件
@@ -139,7 +139,7 @@ Page({
     const idx = e.currentTarget.dataset.idx;
     const picked = this.data.detectItems[idx] || {};
     this.setData({ detectVisible: false, detectItems: [] });
-    if (picked.cropUrl) this.showRecognize(picked.cropUrl);
+    if (picked.cropUrl) this.showRecognize(picked.cropUrl, picked.type);
   },
 
   // 取消多件选择
@@ -148,21 +148,25 @@ Page({
   },
 
   // 展示确认框（cutoutUrl 已是抠图+裁剪后的干净单件）
-  showRecognize(cutoutUrl) {
+  // name 为视觉模型识别的衣物名称（如"牛仔短裤"），带入标签栏，保存时作为标签带出
+  showRecognize(cutoutUrl, name) {
+    const garmentName = (name || '').trim();
     const item = {
-      category: '上装',
+      category: this.guessCategory(garmentName),
       color: '白色',
       brand: '',
       season: '四季',
       tags: []
     };
+    // 把名称预填到标签栏，用户可编辑/增删
+    const tagsText = garmentName ? garmentName : '';
     wx.showLoading({ title: '加载中...', mask: true });
     this.setData({
       recognizeVisible: true,
       pendingImageUrl: cutoutUrl,
       pendingDisplayUrl: cutoutUrl,
       pendingItem: item,
-      pendingTagsText: ''
+      pendingTagsText: tagsText
     });
     if (wx.getImageInfo) {
       wx.getImageInfo({
@@ -173,6 +177,17 @@ Page({
     } else {
       wx.hideLoading();
     }
+  },
+
+  // 根据衣物名称关键词猜测分类，识别不到默认上装
+  guessCategory(name) {
+    if (!name) return '上装';
+    if (/(裤|裙裤|短裤|长裤|牛仔裤)/.test(name)) return '下装';
+    if (/(连衣裙|半身裙|长裙|短裙)/.test(name)) return '连衣裙';
+    if (/(外套|夹克|风衣|大衣|羽绒服|棉服|西装)/.test(name)) return '外套';
+    if (/(鞋|靴|凉鞋|运动鞋|帆布鞋)/.test(name)) return '鞋履';
+    if (/(帽|围巾|包| belt|腰带|领带|袜子|手套)/.test(name)) return '配饰';
+    return '上装';
   },
 
   // ---- 确认弹窗内的交互 ----
