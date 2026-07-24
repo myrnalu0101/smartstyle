@@ -155,6 +155,19 @@
 
   <!-- STEP: RESULT -->
   <view wx:if="{{step === 'RESULT'}}" class="result-view">
+    <!-- 人形剪影预览：把搭配的衣物叠加到人形轮廓上 -->
+    <view class="silhouette-wrap">
+      <view class="silhouette">
+        <view class="s-head"></view>
+        <view class="s-neck"></view>
+        <view class="s-body"></view>
+        <image wx:if="{{outfitPreview.outer}}" class="p-outer" src="{{outfitPreview.outer}}" mode="aspectFit" />
+        <image wx:if="{{outfitPreview.top}}" class="p-top" src="{{outfitPreview.top}}" mode="aspectFit" />
+        <image wx:if="{{outfitPreview.dress}}" class="p-dress" src="{{outfitPreview.dress}}" mode="aspectFit" />
+        <image wx:if="{{outfitPreview.bottom}}" class="p-bottom" src="{{outfitPreview.bottom}}" mode="aspectFit" />
+        <image wx:if="{{outfitPreview.shoes}}" class="p-shoes" src="{{outfitPreview.shoes}}" mode="aspectFit" />
+      </view>
+    </view>
     <view class="result-images">
       <view wx:for="{{generatedOutfit.items}}" wx:key="id" class="result-img-wrap {{index === 0 ? 'result-main' : ''}}">
         <image src="{{item.imageUrl}}" class="result-img" mode="aspectFill" />

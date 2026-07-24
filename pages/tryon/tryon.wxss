@@ -338,8 +338,75 @@
 
 /* Result */
 .result-view { height: 100%; display: flex; flex-direction: column; background-color: #f9fafb; margin: 0 -48rpx; }
+
+/* 人形剪影预览 */
+.silhouette-wrap {
+  height: 40%;
+  background: linear-gradient(180deg, #ffffff 0%, #f3f4f6 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32rpx 0;
+  box-sizing: border-box;
+}
+.silhouette {
+  position: relative;
+  width: 280rpx;
+  height: 100%;
+  max-height: 460rpx;
+}
+.s-head {
+  position: absolute;
+  top: 0; left: 50%;
+  transform: translateX(-50%);
+  width: 80rpx; height: 80rpx;
+  border-radius: 50%;
+  background: #e5e7eb;
+}
+.s-neck {
+  position: absolute;
+  top: 72rpx; left: 50%;
+  transform: translateX(-50%);
+  width: 32rpx; height: 32rpx;
+  background: #e5e7eb;
+}
+.s-body {
+  position: absolute;
+  top: 96rpx; left: 50%;
+  transform: translateX(-50%);
+  width: 200rpx; height: 340rpx;
+  border-radius: 60rpx 60rpx 40rpx 40rpx;
+  background: #eef0f3;
+}
+/* 衣物叠加层：按部位定位到人形对应区域 */
+.p-top, .p-outer, .p-bottom, .p-dress, .p-shoes {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.p-top {
+  top: 96rpx;
+  width: 240rpx; height: 200rpx;
+}
+.p-outer {
+  top: 90rpx;
+  width: 260rpx; height: 230rpx;
+}
+.p-dress {
+  top: 96rpx;
+  width: 260rpx; height: 360rpx;
+}
+.p-bottom {
+  top: 280rpx;
+  width: 230rpx; height: 180rpx;
+}
+.p-shoes {
+  top: 420rpx;
+  width: 200rpx; height: 60rpx;
+}
+
 .result-images {
-  height: 55%; background-color: #ffffff; position: relative; overflow: hidden;
+  height: 45%; background-color: #ffffff; position: relative; overflow: hidden;
   display: flex; flex-wrap: wrap; padding: 64rpx; align-content: center;
 }
 .result-main { width: 100%; height: 300rpx; }

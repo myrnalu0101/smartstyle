@@ -17,6 +17,7 @@ Page({
     externalLink: '',
     externalImage: null,
     generatedOutfit: null,
+    outfitPreview: null,
     loadingText: AI_LOADING_TEXTS[0],
     isApplied: false,
     weather: MOCK_WEATHER,
@@ -58,7 +59,7 @@ Page({
 
   setMode(e) {
     const mode = e.currentTarget.dataset.mode;
-    this.setData({ mode, step: 'CONFIG', generatedOutfit: null, isApplied: false }, () => this.checkCanGenerate());
+    this.setData({ mode, step: 'CONFIG', generatedOutfit: null, outfitPreview: null, isApplied: false }, () => this.checkCanGenerate());
   },
 
   selectOccasion(e) {
@@ -137,13 +138,27 @@ Page({
       ))
       .then(outfit => {
         clearInterval(textInterval);
-        this.setData({ generatedOutfit: outfit, step: 'RESULT' });
+        const preview = this.buildOutfitPreview(outfit);
+        this.setData({ generatedOutfit: outfit, outfitPreview: preview, step: 'RESULT' });
       })
       .catch(err => {
         clearInterval(textInterval);
         console.error('生成失败:', err);
         this.setData({ step: 'CONFIG' });
       });
+  },
+
+  // 把搭配结果按部位拆出来，供人形剪影预览叠加
+  buildOutfitPreview(outfit) {
+    const items = (outfit && outfit.items) || [];
+    const find = (cats) => items.find(i => cats.indexOf(i.category) > -1);
+    return {
+      top: (find([Category.TOP]) || {}).imageUrl || '',
+      outer: (find([Category.OUTERWEAR]) || {}).imageUrl || '',
+      bottom: (find([Category.BOTTOM]) || {}).imageUrl || '',
+      dress: (find([Category.DRESS]) || {}).imageUrl || '',
+      shoes: (find([Category.SHOES, '鞋履']) || {}).imageUrl || ''
+    };
   },
 
   buildInventory(lockedIds) {
@@ -180,6 +195,6 @@ Page({
   },
 
   goBack() {
-    this.setData({ step: 'CONFIG', generatedOutfit: null, isApplied: false });
+    this.setData({ step: 'CONFIG', generatedOutfit: null, outfitPreview: null, isApplied: false });
   }
 });
