@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import { authMiddleware } from '../middleware/auth';
+import { isOssEnabled, putToOss } from '../oss';
 
 const UPLOADS_DIR = path.join(__dirname, '..', '..', 'uploads');
 
@@ -44,7 +45,7 @@ uploadRouter.use(authMiddleware);
 
 // POST /api/upload — upload single image
 uploadRouter.post('/', (req: Request, res: Response): void => {
-  upload.single('image')(req, res, (err) => {
+  upload.single('image')(req, res, async (err) => {
     if (err) {
       if (err instanceof multer.MulterError) {
         if (err.code === 'LIMIT_FILE_SIZE') {
@@ -63,8 +64,23 @@ uploadRouter.post('/', (req: Request, res: Response): void => {
       return;
     }
 
+    const filename = req.file.filename;
+    const localUrl = `${req.protocol}://${req.get('host')}/uploads/${filename}`;
+
+    // 配置了 OSS 则上传到 OSS，返回 OSS 公网 URL；否则回退本地 URL
+    if (isOssEnabled()) {
+      try {
+        const buf = fs.readFileSync(req.file.path);
+        const url = await putToOss(`uploads/${filename}`, buf);
+        res.status(201).json({ url, filename });
+        return;
+      } catch (err: any) {
+        console.error('[Upload] OSS 上传失败，回退本地:', err?.message || err);
+        // 落到下面的本地 URL
+      }
+    }
+
     // 返回完整 URL（小程序 <image> 不支持服务端相对路径）
-    const url = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
-    res.status(201).json({ url, filename: req.file.filename });
+    res.status(201).json({ url: localUrl, filename });
   });
 });

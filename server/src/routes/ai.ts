@@ -10,6 +10,7 @@ import fs from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
+import { isOssEnabled, putToOss, fetchBufferFromUrl } from '../oss';
 
 export const aiRouter = Router();
 aiRouter.use(authMiddleware);
@@ -113,9 +114,16 @@ aiRouter.post('/detect', async (req: AuthRequest, res: Response): Promise<void> 
     return;
   }
   const localPath = path.join(UPLOADS_DIR, filename);
+  // 本地没有就从 URL 拉一份到本地（支持 OSS 等远程图），保证后续抠图/读图可用
   if (!fs.existsSync(localPath)) {
-    res.json({ items: [{ cropUrl: imageUrl, type: '' }] });
-    return;
+    try {
+      const buf = await fetchBufferFromUrl(imageUrl);
+      fs.writeFileSync(localPath, buf);
+    } catch (e: any) {
+      console.error('[AI] 拉取原图失败:', imageUrl, e?.message || e);
+      res.json({ items: [{ cropUrl: imageUrl, type: '' }] });
+      return;
+    }
   }
 
   try {
@@ -230,9 +238,16 @@ aiRouter.post('/detect', async (req: AuthRequest, res: Response): Promise<void> 
       cropImg.crop({ x, y, w, h });
       const buf = await cropImg.getBuffer('image/png');
       const newFile = `crop-${uuidv4()}.png`;
-      fs.writeFileSync(path.join(UPLOADS_DIR, newFile), buf);
+      // OSS 启用则存 OSS，否则落本地
+      let cropUrl: string;
+      if (isOssEnabled()) {
+        cropUrl = await putToOss(`uploads/${newFile}`, buf);
+      } else {
+        fs.writeFileSync(path.join(UPLOADS_DIR, newFile), buf);
+        cropUrl = `${req.protocol}://${req.get('host')}/uploads/${newFile}`;
+      }
       items.push({
-        cropUrl: `${req.protocol}://${req.get('host')}/uploads/${newFile}`,
+        cropUrl,
         type: String(c.it.name || '').trim(),
         segmented,
       });
@@ -322,8 +337,15 @@ aiRouter.post('/segment', async (req: AuthRequest, res: Response): Promise<void>
   }
   const localPath = path.join(UPLOADS_DIR, filename);
   if (!fs.existsSync(localPath)) {
-    res.json({ cutoutUrl: imageUrl, segmented: false });
-    return;
+    // 本地没有就从 URL 拉一份（支持 OSS 远程图）
+    try {
+      const fbuf = await fetchBufferFromUrl(imageUrl);
+      fs.writeFileSync(localPath, fbuf);
+    } catch (e: any) {
+      console.error('[AI] 拉取原图失败:', imageUrl, e?.message || e);
+      res.json({ cutoutUrl: imageUrl, segmented: false });
+      return;
+    }
   }
 
   let buf: Buffer | null = null;
@@ -420,16 +442,21 @@ aiRouter.post('/segment', async (req: AuthRequest, res: Response): Promise<void>
   }
 
   const newFile = `cutout-${uuidv4()}.png`;
-  fs.writeFileSync(path.join(UPLOADS_DIR, newFile), buf);
+  let publicUrl: string;
+  if (isOssEnabled()) {
+    publicUrl = await putToOss(`uploads/${newFile}`, buf);
+  } else {
+    fs.writeFileSync(path.join(UPLOADS_DIR, newFile), buf);
+    publicUrl = `${req.protocol}://${req.get('host')}/uploads/${newFile}`;
+  }
 
-  const publicUrl = `${req.protocol}://${req.get('host')}/uploads/${newFile}`;
   res.json({ cutoutUrl: publicUrl, segmented: true });
 });
 
 // ----------------------------------------------------------------
 // POST /api/ai/recognize — 识图（豆包 Anthropic 兼容端点，可选）
 // ----------------------------------------------------------------
-aiRouter.post('/recognize', (req: AuthRequest, res: Response): void => {
+aiRouter.post('/recognize', async (req: AuthRequest, res: Response): Promise<void> => {
   const { imageUrl } = req.body;
   if (!imageUrl) {
     res.status(400).json({ error: '缺少 imageUrl' });
@@ -448,10 +475,16 @@ aiRouter.post('/recognize', (req: AuthRequest, res: Response): void => {
   const localPath = path.join(UPLOADS_DIR, filename);
   let imageBase64 = '';
   try {
-    const buf = fs.readFileSync(localPath);
+    let buf: Buffer;
+    if (fs.existsSync(localPath)) {
+      buf = fs.readFileSync(localPath);
+    } else {
+      // 本地没有就从 URL 拉（支持 OSS 远程图）
+      buf = await fetchBufferFromUrl(imageUrl);
+    }
     imageBase64 = buf.toString('base64');
   } catch (err) {
-    console.error('[AI] 读取本地图片失败:', localPath, err);
+    console.error('[AI] 读取图片失败:', imageUrl, err);
     res.json({ ...FALLBACK_RECOG, recognized: false });
     return;
   }
