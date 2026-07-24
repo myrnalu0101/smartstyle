@@ -144,12 +144,30 @@ aiRouter.post('/recognize', (req: AuthRequest, res: Response): void => {
     },
     body: JSON.stringify(body),
   })
-    .then(r => r.json())
+    .then(async (r) => {
+      // 非 2xx 时记录原始返回，避免 Ark 500 仍被当成功解析
+      if (!r.ok) {
+        const text = await r.text().catch(() => '');
+        console.error('[AI] Ark HTTP', r.status, text.slice(0, 300));
+        return { __error: true, status: r.status, body: text };
+      }
+      return r.json();
+    })
     .then((data: any) => {
-      // Anthropic 格式：data.content[].text
+      if (data?.__error) {
+        res.json({ ...FALLBACK, recognized: false });
+        return;
+      }
+      // Anthropic / GLM 兼容格式：content[] 块可能是 text 或 thinking
       const blocks = Array.isArray(data?.content) ? data.content : [];
       const content = blocks
-        .map((b: any) => (b && typeof b.text === 'string' ? b.text : ''))
+        .map((b: any) => {
+          if (!b) return '';
+          // GLM 思考模型返回 {type:"thinking", thinking:"..."}
+          if (typeof b.thinking === 'string') return b.thinking;
+          if (typeof b.text === 'string') return b.text;
+          return '';
+        })
         .join('')
         .trim();
       const parsed = extractJson(content);
