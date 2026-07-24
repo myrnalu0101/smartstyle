@@ -177,6 +177,14 @@ const aiAPI = {
       method: 'POST',
       body: { imageUrl }
     });
+  },
+
+  // 检测：传已上传图片的完整 URL，返回 { items: [{ cropUrl, type, score }] }
+  detect(imageUrl) {
+    return apiRequest('/ai/detect', {
+      method: 'POST',
+      body: { imageUrl }
+    });
   }
 };
 

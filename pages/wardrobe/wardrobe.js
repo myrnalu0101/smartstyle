@@ -18,6 +18,9 @@ Page({
     recognizing: false,
     pendingImageUrl: '',
     pendingDisplayUrl: '',
+    // 多件选择弹窗
+    detectVisible: false,
+    detectItems: [],
     pendingItem: {
       category: '上装',
       color: '白色',
@@ -100,17 +103,51 @@ Page({
     });
   },
 
-  // 上传图片并调用 CV 抠图，然后弹出确认框（展示抠好的衣服图）
+  // 上传图片 → 物体检测 → 单件直接抠图 / 多件弹选择框
   uploadAndRecognize(filePath) {
     wx.showLoading({ title: '上传中...', mask: true });
     api.uploadAPI.upload(filePath)
       .then(uploadRes => {
         const imageUrl = uploadRes.url;
-        wx.showLoading({ title: '抠图中...', mask: true });
-        return api.aiAPI.segment(imageUrl).then(seg => ({ imageUrl, seg }));
+        wx.showLoading({ title: '检测中...', mask: true });
+        return api.aiAPI.detect(imageUrl).then(d => ({ imageUrl, items: (d && d.items) || [] }));
       })
-      .then(({ imageUrl, seg }) => {
-        // 抠好的图：抠图成功用 cutoutUrl，失败退回原图
+      .then(({ imageUrl, items }) => {
+        wx.hideLoading();
+        // 0 或 1 件：直接对（原图/单件）抠图
+        if (!items.length || items.length === 1) {
+          const target = items[0] && items[0].cropUrl ? items[0].cropUrl : imageUrl;
+          this.proceedToSegment(target);
+          return;
+        }
+        // 多件：弹出选择框，让用户挑一件
+        this.setData({ detectVisible: true, detectItems: items });
+      })
+      .catch(err => {
+        wx.hideLoading();
+        console.error('[Wardrobe] 检测失败:', err);
+        wx.showToast({ title: err.message || '处理失败', icon: 'none' });
+      });
+  },
+
+  // 用户在多件选择框中点了一件
+  pickDetectItem(e) {
+    const cropUrl = e.currentTarget.dataset.url;
+    this.setData({ detectVisible: false, detectItems: [] });
+    this.proceedToSegment(cropUrl);
+  },
+
+  // 取消多件选择
+  cancelDetect() {
+    this.setData({ detectVisible: false, detectItems: [] });
+  },
+
+  // 对选定的图片抠图，然后弹出确认框
+  proceedToSegment(imageUrl) {
+    wx.showLoading({ title: '抠图中...', mask: true });
+    api.aiAPI.segment(imageUrl)
+      .then(seg => {
+        // 抠图成功用 cutoutUrl，失败退回传入图
         const cutoutUrl = (seg && seg.segmented && seg.cutoutUrl) ? seg.cutoutUrl : imageUrl;
         const item = {
           category: '上装',
@@ -119,7 +156,6 @@ Page({
           season: '四季',
           tags: []
         };
-        // 先用 loading 挡住，避免大图加载时界面卡顿
         wx.showLoading({ title: '加载中...', mask: true });
         this.setData({
           recognizeVisible: true,
@@ -128,7 +164,6 @@ Page({
           pendingItem: item,
           pendingTagsText: ''
         });
-        // 预加载图片，加载完再隐藏 loading
         if (wx.getImageInfo) {
           wx.getImageInfo({
             src: cutoutUrl,

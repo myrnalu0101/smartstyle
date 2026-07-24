@@ -78,6 +78,28 @@
     </view>
   </scroll-view>
 
+  <!-- 多件选择弹窗 -->
+  <view wx:if="{{detectVisible}}" class="recognize-mask">
+    <view class="recognize-modal">
+      <view class="recognize-header">
+        <text class="recognize-title">检测到多件，选一件录入</text>
+        <text class="recognize-close" bindtap="cancelDetect">×</text>
+      </view>
+      <view class="detect-grid">
+        <view
+          wx:for="{{detectItems}}"
+          wx:key="cropUrl"
+          class="detect-cell"
+          bindtap="pickDetectItem"
+          data-url="{{item.cropUrl}}"
+        >
+          <image class="detect-img" src="{{item.cropUrl}}" mode="aspectFit" />
+          <text wx:if="{{item.type}}" class="detect-type">{{item.type}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
   <!-- 识图确认弹窗 -->
   <view wx:if="{{recognizeVisible}}" class="recognize-mask">
     <view class="recognize-modal">

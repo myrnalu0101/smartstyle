@@ -381,3 +381,36 @@
 .recognize-btn::after {
   border: none;
 }
+
+/* 多件选择网格 */
+.detect-grid {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 20rpx 24rpx;
+}
+
+.detect-cell {
+  width: 31%;
+  margin: 0 2% 24rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.detect-img {
+  width: 100%;
+  height: 220rpx;
+  background: #f3f4f6;
+  border-radius: 16rpx;
+  border: 2rpx solid #e5e7eb;
+}
+
+.detect-type {
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  color: #6b7280;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
