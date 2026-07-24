@@ -163,19 +163,42 @@ aiRouter.post('/detect', async (req: AuthRequest, res: Response): Promise<void> 
     const parsed = extractJson(content);
     const rawItems: any[] = Array.isArray(parsed) ? parsed : parsed?.items || [];
 
+    // 算每个框的归一化面积占比，并按面积降序
+    const candidates = rawItems
+      .map((it) => {
+        const box = Array.isArray(it?.box) ? it.box : null;
+        if (!box || box.length < 4) return null;
+        const nxMin = clamp01(Number(box[0]));
+        const nyMin = clamp01(Number(box[1]));
+        const nxMax = clamp01(Number(box[2]));
+        const nyMax = clamp01(Number(box[3]));
+        const wN = Math.abs(nxMax - nxMin);
+        const hN = Math.abs(nyMax - nyMin);
+        return {
+          it,
+          nxMin: Math.min(nxMin, nxMax),
+          nyMin: Math.min(nyMin, nyMax),
+          nxMax: Math.max(nxMin, nxMax),
+          nyMax: Math.max(nyMin, nyMax),
+          wN,
+          hN,
+          area: wN * hN, // 归一化面积 0~1
+        };
+      })
+      .filter((c): c is NonNullable<typeof c> => !!c && c.wN >= 0.05 && c.hN >= 0.05)
+      .sort((a, b) => b.area - a.area);
+
+    // 只保留主体衣物：丢掉面积不足最大件 1/4 的边角小件
+    const maxArea = candidates[0]?.area || 0;
+    const kept = candidates.filter((c) => c.area >= maxArea * 0.25);
+
     // 归一化坐标 → 像素，裁剪每件
     const items: any[] = [];
-    for (const it of rawItems) {
-      const box = Array.isArray(it?.box) ? it.box : null;
-      if (!box || box.length < 4) continue;
-      const xMin = clamp01(Number(box[0])) * W;
-      const yMin = clamp01(Number(box[1])) * H;
-      const xMax = clamp01(Number(box[2])) * W;
-      const yMax = clamp01(Number(box[3])) * H;
-      let x = Math.round(Math.min(xMin, xMax));
-      let y = Math.round(Math.min(yMin, yMax));
-      let w = Math.round(Math.abs(xMax - xMin));
-      let h = Math.round(Math.abs(yMax - yMin));
+    for (const c of kept) {
+      let x = Math.round(c.nxMin * W);
+      let y = Math.round(c.nyMin * H);
+      let w = Math.round(c.wN * W);
+      let h = Math.round(c.hN * H);
       if (w < 12 || h < 12) continue;
       x = Math.max(0, Math.min(x, W - 1));
       y = Math.max(0, Math.min(y, H - 1));
@@ -189,13 +212,13 @@ aiRouter.post('/detect', async (req: AuthRequest, res: Response): Promise<void> 
       fs.writeFileSync(path.join(UPLOADS_DIR, newFile), buf);
       items.push({
         cropUrl: `${req.protocol}://${req.get('host')}/uploads/${newFile}`,
-        type: String(it.name || '').trim(),
+        type: String(c.it.name || '').trim(),
         // 归一化框（相对原图），选择后回传给 /segment，从整图抠图里裁这一件
         box: [
-          Number(clamp01(Number(box[0])).toFixed(4)),
-          Number(clamp01(Number(box[1])).toFixed(4)),
-          Number(clamp01(Number(box[2])).toFixed(4)),
-          Number(clamp01(Number(box[3])).toFixed(4)),
+          Number(c.nxMin.toFixed(4)),
+          Number(c.nyMin.toFixed(4)),
+          Number(c.nxMax.toFixed(4)),
+          Number(c.nyMax.toFixed(4)),
         ],
       });
     }
@@ -226,71 +249,121 @@ aiRouter.post('/segment', async (req: AuthRequest, res: Response): Promise<void>
     return;
   }
   const hasBox = Array.isArray(box) && box.length >= 4 && box.every((v: any) => Number.isFinite(Number(v)));
-  if (!REMOVEBG_API_KEY) {
-    // 没配 remove.bg key，返回原图 URL，不阻断流程
+  if (!ALI_ACCESS_KEY_ID || !ALI_ACCESS_KEY_SECRET) {
     res.json({ cutoutUrl: imageUrl, segmented: false });
     return;
   }
 
-  try {
-    // 1. 调 remove.bg 去背景：传图片公网 URL，拿回透明背景 PNG
-    //    （整图去背景，质量好；多件时下面再按 box 裁出选中的一件）
-    const form = new FormData();
-    form.append('image_url', imageUrl);
-    form.append('size', 'auto');
-    const rbResp = await fetch('https://api.remove.bg/v1.0/removebg', {
-      method: 'POST',
-      headers: { 'X-API-Key': REMOVEBG_API_KEY },
-      body: form,
-    });
-    if (!rbResp.ok) {
-      const t = await rbResp.text().catch(() => '');
-      console.error('[AI] remove.bg HTTP', rbResp.status, t.slice(0, 300));
-      res.json({ cutoutUrl: imageUrl, segmented: false });
-      return;
-    }
-    let buf = Buffer.from(await rbResp.arrayBuffer());
-
-    // 2. 若带 box（用户选了多件中的一件）：从整图去背景结果里按框裁出这一件
-    if (hasBox) {
-      try {
-        const { Jimp } = require('jimp');
-        const cut = await Jimp.read(buf);
-        const W = cut.width;
-        const H = cut.height;
-        const xMin = clamp01(Number(box[0])) * W;
-        const yMin = clamp01(Number(box[1])) * H;
-        const xMax = clamp01(Number(box[2])) * W;
-        const yMax = clamp01(Number(box[3])) * H;
-        let x = Math.round(Math.min(xMin, xMax));
-        let y = Math.round(Math.min(yMin, yMax));
-        let w = Math.round(Math.abs(xMax - xMin));
-        let h = Math.round(Math.abs(yMax - yMin));
-        if (w >= 12 && h >= 12) {
-          x = Math.max(0, Math.min(x, W - 1));
-          y = Math.max(0, Math.min(y, H - 1));
-          w = Math.min(w, W - x);
-          h = Math.min(h, H - y);
-          if (w >= 12 && h >= 12) {
-            cut.crop({ x, y, w, h });
-            buf = await cut.getBuffer('image/png');
-          }
-        }
-      } catch (e: any) {
-        console.error('[AI] 裁剪单件失败，使用整图抠图:', e?.message || e);
-      }
-    }
-
-    const newFile = `cutout-${uuidv4()}.png`;
-    fs.writeFileSync(path.join(UPLOADS_DIR, newFile), buf);
-
-    const publicUrl = `${req.protocol}://${req.get('host')}/uploads/${newFile}`;
-    res.json({ cutoutUrl: publicUrl, segmented: true });
-  } catch (err: any) {
-    console.error('[AI] 抠图失败:', err?.message || err);
-    // 失败返回原图，不阻断
+  // 从 imageUrl 解析本地文件名（SegmentCloth 用本地文件流，绕过 OSS-URL 限制）
+  const filename = filenameFromUrl(imageUrl);
+  if (!filename) {
     res.json({ cutoutUrl: imageUrl, segmented: false });
+    return;
   }
+  const localPath = path.join(UPLOADS_DIR, filename);
+  if (!fs.existsSync(localPath)) {
+    res.json({ cutoutUrl: imageUrl, segmented: false });
+    return;
+  }
+
+  let buf: Buffer | null = null;
+
+  // 1. 优先：阿里云 SegmentCloth —— 抠出衣物（去人去背景），整图尺寸不变，box 可对齐
+  try {
+    const aliMod: any = require('@alicloud/imageseg20191230');
+    const Client = aliMod.default;
+    const { Config } = require('@alicloud/openapi-client');
+    const { RuntimeOptions } = require('@alicloud/tea-util');
+    const config = new Config({
+      accessKeyId: ALI_ACCESS_KEY_ID,
+      accessKeySecret: ALI_ACCESS_KEY_SECRET,
+      endpoint: 'imageseg.cn-shanghai.aliyuncs.com',
+    });
+    const client = new Client(config);
+    const segReq = new aliMod.SegmentClothAdvanceRequest({
+      imageURLObject: fs.createReadStream(localPath),
+    });
+    const runtime = new RuntimeOptions({ readTimeout: 60000, connectTimeout: 30000 });
+    const resp = await client.segmentClothAdvance(segReq, runtime);
+    const elements = (resp?.body?.data?.elements as any[]) || [];
+    const cutUrl: string = elements[0]?.imageURL;
+    if (cutUrl && cutUrl.startsWith('http')) {
+      const imgResp = await fetch(cutUrl);
+      buf = Buffer.from(await imgResp.arrayBuffer());
+    }
+  } catch (err: any) {
+    console.error('[AI] SegmentCloth 失败，尝试 remove.bg 兜底:', err?.message || err);
+  }
+
+  // 2. 兜底：SegmentCloth 失败/受限时，remove.bg 去背景（注意：人会留下，仅去背景）
+  if (!buf && REMOVEBG_API_KEY) {
+    try {
+      const form = new FormData();
+      form.append('image_url', imageUrl);
+      form.append('size', 'auto');
+      const rbResp = await fetch('https://api.remove.bg/v1.0/removebg', {
+        method: 'POST',
+        headers: { 'X-API-Key': REMOVEBG_API_KEY },
+        body: form,
+      });
+      if (rbResp.ok) {
+        buf = Buffer.from(await rbResp.arrayBuffer());
+      } else {
+        const t = await rbResp.text().catch(() => '');
+        console.error('[AI] remove.bg HTTP', rbResp.status, t.slice(0, 300));
+      }
+    } catch (err: any) {
+      console.error('[AI] remove.bg 失败:', err?.message || err);
+    }
+  }
+
+  if (!buf) {
+    // 两个抠图都失败，返回原图，不阻断录入
+    res.json({ cutoutUrl: imageUrl, segmented: false });
+    return;
+  }
+
+  // 3. 多件：从整图抠图结果里按 box 裁出选中的一件
+  //    关键：先整图抠图（尺寸不变、质量好），再裁单件；避免对局部图抠图带人/放大
+  if (hasBox) {
+    try {
+      const { Jimp } = require('jimp');
+      const cut = await Jimp.read(buf);
+      const W = cut.width;
+      const H = cut.height;
+      const xMin = clamp01(Number(box[0])) * W;
+      const yMin = clamp01(Number(box[1])) * H;
+      const xMax = clamp01(Number(box[2])) * W;
+      const yMax = clamp01(Number(box[3])) * H;
+      let x = Math.round(Math.min(xMin, xMax));
+      let y = Math.round(Math.min(yMin, yMax));
+      let w = Math.round(Math.abs(xMax - xMin));
+      let h = Math.round(Math.abs(yMax - yMin));
+      if (w >= 12 && h >= 12) {
+        x = Math.max(0, Math.min(x, W - 1));
+        y = Math.max(0, Math.min(y, H - 1));
+        w = Math.min(w, W - x);
+        h = Math.min(h, H - y);
+        if (w >= 12 && h >= 12) {
+          cut.crop({ x, y, w, h });
+          buf = await cut.getBuffer('image/png');
+        }
+      }
+    } catch (e: any) {
+      console.error('[AI] 裁剪单件失败，使用整图抠图:', e?.message || e);
+    }
+  }
+
+  if (!buf) {
+    res.json({ cutoutUrl: imageUrl, segmented: false });
+    return;
+  }
+
+  const newFile = `cutout-${uuidv4()}.png`;
+  fs.writeFileSync(path.join(UPLOADS_DIR, newFile), buf);
+
+  const publicUrl = `${req.protocol}://${req.get('host')}/uploads/${newFile}`;
+  res.json({ cutoutUrl: publicUrl, segmented: true });
 });
 
 // ----------------------------------------------------------------
