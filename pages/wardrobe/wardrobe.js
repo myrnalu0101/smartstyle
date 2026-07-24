@@ -21,6 +21,7 @@ Page({
     // 多件选择弹窗
     detectVisible: false,
     detectItems: [],
+    pendingOriginalUrl: '',
     pendingItem: {
       category: '上装',
       color: '白色',
@@ -114,10 +115,16 @@ Page({
       })
       .then(({ imageUrl, items }) => {
         wx.hideLoading();
-        // 0 或 1 件：直接对（原图/单件）抠图
-        if (!items.length || items.length === 1) {
-          const target = items[0] && items[0].cropUrl ? items[0].cropUrl : imageUrl;
-          this.proceedToSegment(target);
+        // 记下原图，多件选择后回传给抠图
+        this.setData({ pendingOriginalUrl: imageUrl });
+        // 0 件：整图无 box 抠图
+        if (!items.length) {
+          this.proceedToSegment(imageUrl, null);
+          return;
+        }
+        // 1 件：带该件 box 整图抠图后裁剪
+        if (items.length === 1) {
+          this.proceedToSegment(imageUrl, items[0].box || null);
           return;
         }
         // 多件：弹出选择框，让用户挑一件
@@ -132,22 +139,26 @@ Page({
 
   // 用户在多件选择框中点了一件
   pickDetectItem(e) {
-    const cropUrl = e.currentTarget.dataset.url;
+    const idx = e.currentTarget.dataset.idx;
+    const picked = this.data.detectItems[idx] || {};
+    const box = picked.box || null;
     this.setData({ detectVisible: false, detectItems: [] });
-    this.proceedToSegment(cropUrl);
+    // 多件：把原始上传图 + 该件框 传给抠图（整图抠图后裁这一件）
+    this.proceedToSegment(this.data.pendingOriginalUrl, box);
   },
 
   // 取消多件选择
   cancelDetect() {
-    this.setData({ detectVisible: false, detectItems: [] });
+    this.setData({ detectVisible: false, detectItems: [], pendingOriginalUrl: '' });
   },
 
   // 对选定的图片抠图，然后弹出确认框
-  proceedToSegment(imageUrl) {
+  // imageUrl: 原始上传图；box: 选定件的归一化框（可选），传时整图抠图后裁该件
+  proceedToSegment(imageUrl, box) {
     wx.showLoading({ title: '抠图中...', mask: true });
-    api.aiAPI.segment(imageUrl)
+    api.aiAPI.segment(imageUrl, box)
       .then(seg => {
-        // 抠图成功用 cutoutUrl，失败退回传入图
+        // 抠图成功用 cutoutUrl，失败退回原图
         const cutoutUrl = (seg && seg.segmented && seg.cutoutUrl) ? seg.cutoutUrl : imageUrl;
         const item = {
           category: '上装',

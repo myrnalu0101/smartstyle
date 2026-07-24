@@ -187,6 +187,13 @@ aiRouter.post('/detect', async (req: AuthRequest, res: Response): Promise<void> 
       items.push({
         cropUrl: `${req.protocol}://${req.get('host')}/uploads/${newFile}`,
         type: String(it.name || '').trim(),
+        // 归一化框（相对原图），选择后回传给 /segment，从整图抠图里裁这一件
+        box: [
+          Number(clamp01(Number(box[0])).toFixed(4)),
+          Number(clamp01(Number(box[1])).toFixed(4)),
+          Number(clamp01(Number(box[2])).toFixed(4)),
+          Number(clamp01(Number(box[3])).toFixed(4)),
+        ],
       });
     }
 
@@ -210,11 +217,12 @@ function clamp01(v: number): number {
 // POST /api/ai/segment — 抠图，返回抠好图的公网 URL
 // ----------------------------------------------------------------
 aiRouter.post('/segment', async (req: AuthRequest, res: Response): Promise<void> => {
-  const { imageUrl } = req.body;
+  const { imageUrl, box } = req.body;
   if (!imageUrl) {
     res.status(400).json({ error: '缺少 imageUrl' });
     return;
   }
+  const hasBox = Array.isArray(box) && box.length >= 4 && box.every((v: any) => Number.isFinite(Number(v)));
   if (!ALI_ACCESS_KEY_ID || !ALI_ACCESS_KEY_SECRET) {
     // 没配阿里云 key，返回原图 URL，不阻断流程
     res.json({ cutoutUrl: imageUrl, segmented: false });
@@ -264,9 +272,41 @@ aiRouter.post('/segment', async (req: AuthRequest, res: Response): Promise<void>
       return;
     }
 
-    // 下载阿里云返回的抠图，存为本地文件，生成自己的持久 URL
+    // 下载阿里云返回的抠图
     const imgResp = await fetch(cutUrl);
-    const buf = Buffer.from(await imgResp.arrayBuffer());
+    let buf = Buffer.from(await imgResp.arrayBuffer());
+
+    // 若带 box（用户选了多件中的一件）：从整图抠图里按框裁出这一件
+    // 关键：先对整图抠图（质量好、不变形），再裁单件；避免对局部图抠图导致带人/放大
+    if (hasBox) {
+      try {
+        const { Jimp } = require('jimp');
+        const cut = await Jimp.read(buf);
+        const W = cut.width;
+        const H = cut.height;
+        const xMin = clamp01(Number(box[0])) * W;
+        const yMin = clamp01(Number(box[1])) * H;
+        const xMax = clamp01(Number(box[2])) * W;
+        const yMax = clamp01(Number(box[3])) * H;
+        let x = Math.round(Math.min(xMin, xMax));
+        let y = Math.round(Math.min(yMin, yMax));
+        let w = Math.round(Math.abs(xMax - xMin));
+        let h = Math.round(Math.abs(yMax - yMin));
+        if (w >= 12 && h >= 12) {
+          x = Math.max(0, Math.min(x, W - 1));
+          y = Math.max(0, Math.min(y, H - 1));
+          w = Math.min(w, W - x);
+          h = Math.min(h, H - y);
+          if (w >= 12 && h >= 12) {
+            cut.crop({ x, y, w, h });
+            buf = await cut.getBuffer('image/png');
+          }
+        }
+      } catch (e: any) {
+        console.error('[AI] 裁剪单件失败，使用整图抠图:', e?.message || e);
+      }
+    }
+
     const newFile = `cutout-${uuidv4()}.png`;
     fs.writeFileSync(path.join(UPLOADS_DIR, newFile), buf);
 

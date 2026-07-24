@@ -171,12 +171,12 @@ const aiAPI = {
     });
   },
 
-  // 抠图：传已上传图片的完整 URL，返回 { cutoutUrl, segmented }
-  segment(imageUrl) {
-    return apiRequest('/ai/segment', {
-      method: 'POST',
-      body: { imageUrl }
-    });
+  // 抠图：传已上传图片的完整 URL，可选 box(归一化[x_min,y_min,x_max,y_max])
+  // 传 box 时先对整图抠图再按框裁单件（避免局部抠图带人/放大）
+  segment(imageUrl, box) {
+    const body = { imageUrl };
+    if (box) body.box = box;
+    return apiRequest('/ai/segment', { method: 'POST', body });
   },
 
   // 检测：传已上传图片的完整 URL，返回 { items: [{ cropUrl, type, score }] }

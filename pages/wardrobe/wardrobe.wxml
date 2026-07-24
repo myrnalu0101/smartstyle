@@ -91,7 +91,7 @@
           wx:key="cropUrl"
           class="detect-cell"
           bindtap="pickDetectItem"
-          data-url="{{item.cropUrl}}"
+          data-idx="{{index}}"
         >
           <image class="detect-img" src="{{item.cropUrl}}" mode="aspectFit" />
           <text wx:if="{{item.type}}" class="detect-type">{{item.type}}</text>
