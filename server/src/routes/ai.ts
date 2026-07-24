@@ -93,14 +93,14 @@ aiRouter.post('/recognize', (req: AuthRequest, res: Response): void => {
 
   if (!AUTH_TOKEN) {
     // 没配 token，直接返回兜底值，不阻断录入
-    res.json({ ...FALLBACK, recognized: false, debug: 'NO_AUTH_TOKEN' });
+    res.json({ ...FALLBACK, recognized: false });
     return;
   }
 
   // 1. 从本地读取图片并转 base64
   const filename = filenameFromUrl(imageUrl);
   if (!filename) {
-    res.json({ ...FALLBACK, recognized: false, debug: 'FILENAME_PARSE_FAIL' });
+    res.json({ ...FALLBACK, recognized: false });
     return;
   }
   const localPath = path.join(UPLOADS_DIR, filename);
@@ -110,7 +110,7 @@ aiRouter.post('/recognize', (req: AuthRequest, res: Response): void => {
     imageBase64 = buf.toString('base64');
   } catch (err) {
     console.error('[AI] 读取本地图片失败:', localPath, err);
-    res.json({ ...FALLBACK, recognized: false, debug: 'READ_FILE_FAIL', localPath });
+    res.json({ ...FALLBACK, recognized: false });
     return;
   }
   const mediaType = mediaTypeFromExt(filename);
@@ -160,14 +160,11 @@ aiRouter.post('/recognize', (req: AuthRequest, res: Response): void => {
         season: FALLBACK.season,
         tags: Array.isArray(parsed?.tags) ? parsed.tags.slice(0, 5) : [],
         recognized: !!parsed,
-        debug: parsed ? 'OK' : 'NO_JSON_IN_REPLY',
-        arkError: data?.error || null,
-        rawContent: content.slice(0, 200),
       };
       res.json(result);
     })
     .catch((err: any) => {
       console.error('[AI] 识图失败:', err);
-      res.json({ ...FALLBACK, recognized: false, debug: 'FETCH_FAIL', fetchError: String(err) });
+      res.json({ ...FALLBACK, recognized: false });
     });
 });
