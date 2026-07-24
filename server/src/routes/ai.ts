@@ -18,6 +18,9 @@ aiRouter.use(authMiddleware);
 const ALI_ACCESS_KEY_ID = process.env.ALI_ACCESS_KEY_ID || '';
 const ALI_ACCESS_KEY_SECRET = process.env.ALI_ACCESS_KEY_SECRET || '';
 
+// ---- remove.bg 抠图配置（去背景，替代阿里云 SegmentCloth）----
+const REMOVEBG_API_KEY = process.env.REMOVEBG_API_KEY || '';
+
 // ---- 豆包 Anthropic 兼容端点配置（识图用，可选）----
 const BASE_URL = process.env.ANTHROPIC_BASE_URL || 'https://ark.cn-beijing.volces.com/api/compatible';
 const AUTH_TOKEN = process.env.ANTHROPIC_AUTH_TOKEN || '';
@@ -223,61 +226,32 @@ aiRouter.post('/segment', async (req: AuthRequest, res: Response): Promise<void>
     return;
   }
   const hasBox = Array.isArray(box) && box.length >= 4 && box.every((v: any) => Number.isFinite(Number(v)));
-  if (!ALI_ACCESS_KEY_ID || !ALI_ACCESS_KEY_SECRET) {
-    // 没配阿里云 key，返回原图 URL，不阻断流程
-    res.json({ cutoutUrl: imageUrl, segmented: false });
-    return;
-  }
-
-  // 1. 从 imageUrl 解析本地文件名并读取本地图片流
-  //    （Advance 版本直接传本地文件流，绕过"必须上海 OSS URL"的限制）
-  const filename = filenameFromUrl(imageUrl);
-  if (!filename) {
-    res.json({ cutoutUrl: imageUrl, segmented: false });
-    return;
-  }
-  const localPath = path.join(UPLOADS_DIR, filename);
-  if (!fs.existsSync(localPath)) {
+  if (!REMOVEBG_API_KEY) {
+    // 没配 remove.bg key，返回原图 URL，不阻断流程
     res.json({ cutoutUrl: imageUrl, segmented: false });
     return;
   }
 
   try {
-    // 动态 require 阿里云 SDK（default export 才是 Client 构造器）
-    const aliMod: any = require('@alicloud/imageseg20191230');
-    const Client = aliMod.default;
-    const { Config } = require('@alicloud/openapi-client');
-    const { RuntimeOptions } = require('@alicloud/tea-util');
-
-    const config = new Config({
-      accessKeyId: ALI_ACCESS_KEY_ID,
-      accessKeySecret: ALI_ACCESS_KEY_SECRET,
-      endpoint: 'imageseg.cn-shanghai.aliyuncs.com',
+    // 1. 调 remove.bg 去背景：传图片公网 URL，拿回透明背景 PNG
+    //    （整图去背景，质量好；多件时下面再按 box 裁出选中的一件）
+    const form = new FormData();
+    form.append('image_url', imageUrl);
+    form.append('size', 'auto');
+    const rbResp = await fetch('https://api.remove.bg/v1.0/removebg', {
+      method: 'POST',
+      headers: { 'X-API-Key': REMOVEBG_API_KEY },
+      body: form,
     });
-    const client = new Client(config);
-
-    // 服装分割 Advance：用本地文件流，识别出衣服各部位
-    const segReq = new aliMod.SegmentClothAdvanceRequest({
-      imageURLObject: fs.createReadStream(localPath),
-    });
-    const runtime = new RuntimeOptions({ readTimeout: 60000, connectTimeout: 30000 });
-    const resp = await client.segmentClothAdvance(segReq, runtime);
-
-    // data.elements[] 每个是一件抠好的衣服，imageURL 是阿里云临时 OSS URL（有时效）
-    const elements = (resp?.body?.data?.elements as any[]) || [];
-    const first = elements[0];
-    const cutUrl: string = first?.imageURL;
-    if (!cutUrl || !cutUrl.startsWith('http')) {
+    if (!rbResp.ok) {
+      const t = await rbResp.text().catch(() => '');
+      console.error('[AI] remove.bg HTTP', rbResp.status, t.slice(0, 300));
       res.json({ cutoutUrl: imageUrl, segmented: false });
       return;
     }
+    let buf = Buffer.from(await rbResp.arrayBuffer());
 
-    // 下载阿里云返回的抠图
-    const imgResp = await fetch(cutUrl);
-    let buf = Buffer.from(await imgResp.arrayBuffer());
-
-    // 若带 box（用户选了多件中的一件）：从整图抠图里按框裁出这一件
-    // 关键：先对整图抠图（质量好、不变形），再裁单件；避免对局部图抠图导致带人/放大
+    // 2. 若带 box（用户选了多件中的一件）：从整图去背景结果里按框裁出这一件
     if (hasBox) {
       try {
         const { Jimp } = require('jimp');
