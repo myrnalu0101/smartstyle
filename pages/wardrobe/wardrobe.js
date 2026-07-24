@@ -160,28 +160,19 @@ Page({
     this.setData({
       recognizeVisible: true,
       pendingImageUrl: cutoutUrl,
-          pendingDisplayUrl: cutoutUrl,
-          pendingItem: item,
-          pendingTagsText: ''
-        });
-        if (wx.getImageInfo) {
-          wx.getImageInfo({
-            src: cutoutUrl,
-            success: () => wx.hideLoading(),
-            fail: () => wx.hideLoading()
-          });
-        } else {
-          wx.hideLoading();
-        }
-        if (!seg || !seg.segmented) {
-          wx.showToast({ title: '抠图不可用，使用原图', icon: 'none' });
-        }
-      })
-      .catch(err => {
-        wx.hideLoading();
-        console.error('[Wardrobe] 抠图失败:', err);
-        wx.showToast({ title: err.message || '处理失败', icon: 'none' });
+      pendingDisplayUrl: cutoutUrl,
+      pendingItem: item,
+      pendingTagsText: ''
+    });
+    if (wx.getImageInfo) {
+      wx.getImageInfo({
+        src: cutoutUrl,
+        success: () => wx.hideLoading(),
+        fail: () => wx.hideLoading()
       });
+    } else {
+      wx.hideLoading();
+    }
   },
 
   // ---- 确认弹窗内的交互 ----
