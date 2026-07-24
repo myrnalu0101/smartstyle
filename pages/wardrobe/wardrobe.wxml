@@ -86,7 +86,7 @@
         <text class="recognize-close" bindtap="cancelRecognize">×</text>
       </view>
 
-      <image wx:if="{{pendingImageUrl}}" class="recognize-img" src="{{pendingImageUrl}}" mode="aspectFit" />
+      <image wx:if="{{pendingDisplayUrl}}" class="recognize-img" src="{{pendingDisplayUrl}}" mode="aspectFit" />
 
       <view class="recognize-form">
         <view class="recognize-row">

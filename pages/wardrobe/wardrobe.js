@@ -17,6 +17,7 @@ Page({
     recognizeVisible: false,
     recognizing: false,
     pendingImageUrl: '',
+    pendingDisplayUrl: '',
     pendingItem: {
       category: '上装',
       color: '白色',
@@ -99,38 +100,41 @@ Page({
     });
   },
 
-  // 上传图片并调用 AI 识图，然后弹出确认框
+  // 上传图片并调用 CV 抠图，然后弹出确认框（展示抠好的衣服图）
   uploadAndRecognize(filePath) {
     wx.showLoading({ title: '上传中...', mask: true });
     api.uploadAPI.upload(filePath)
       .then(uploadRes => {
         const imageUrl = uploadRes.url;
-        wx.showLoading({ title: '识图中...', mask: true });
-        return api.aiAPI.recognize(imageUrl).then(rec => ({ imageUrl, rec }));
+        wx.showLoading({ title: '抠图中...', mask: true });
+        return api.aiAPI.segment(imageUrl).then(seg => ({ imageUrl, seg }));
       })
-      .then(({ imageUrl, rec }) => {
+      .then(({ imageUrl, seg }) => {
         wx.hideLoading();
+        // 展示抠好的图（抠图失败则退回原图）
+        const displayUrl = (seg && seg.cutoutUrl) ? seg.cutoutUrl : imageUrl;
         const item = {
-          category: rec.category || '上装',
-          color: rec.color || '白色',
-          brand: rec.brand || '',
-          season: rec.season || '四季',
-          tags: Array.isArray(rec.tags) ? rec.tags : []
+          category: '上装',
+          color: '白色',
+          brand: '',
+          season: '四季',
+          tags: []
         };
         this.setData({
           recognizeVisible: true,
-          pendingImageUrl: imageUrl,
+          pendingImageUrl: seg && seg.segmented ? imageUrl : displayUrl,
+          pendingDisplayUrl: displayUrl,
           pendingItem: item,
-          pendingTagsText: item.tags.join('、')
+          pendingTagsText: ''
         });
-        if (!rec.recognized) {
-          wx.showToast({ title: '识图不可用，请手动填写', icon: 'none' });
+        if (!seg || !seg.segmented) {
+          wx.showToast({ title: '抠图不可用，使用原图', icon: 'none' });
         }
       })
       .catch(err => {
         wx.hideLoading();
-        console.error('[Wardrobe] 识图失败:', err);
-        wx.showToast({ title: err.message || '识图失败', icon: 'none' });
+        console.error('[Wardrobe] 抠图失败:', err);
+        wx.showToast({ title: err.message || '处理失败', icon: 'none' });
       });
   },
 
@@ -154,7 +158,7 @@ Page({
 
   // 取消录入：丢弃已上传的图（后端无删除接口，仅前端不保存记录）
   cancelRecognize() {
-    this.setData({ recognizeVisible: false, pendingImageUrl: '', pendingTagsText: '' });
+    this.setData({ recognizeVisible: false, pendingImageUrl: '', pendingDisplayUrl: '', pendingTagsText: '' });
   },
 
   // 确认保存
@@ -183,7 +187,7 @@ Page({
     })
       .then(() => {
         wx.hideLoading();
-        this.setData({ recognizeVisible: false, pendingImageUrl: '', pendingTagsText: '' });
+        this.setData({ recognizeVisible: false, pendingImageUrl: '', pendingDisplayUrl: '', pendingTagsText: '' });
         wx.showToast({ title: '已保存', icon: 'success' });
         this.loadWardrobe();
       })

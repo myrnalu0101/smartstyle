@@ -169,6 +169,14 @@ const aiAPI = {
       method: 'POST',
       body: { imageUrl }
     });
+  },
+
+  // 抠图：传已上传图片的完整 URL，返回 { cutoutUrl, segmented }
+  segment(imageUrl) {
+    return apiRequest('/ai/segment', {
+      method: 'POST',
+      body: { imageUrl }
+    });
   }
 };
 
