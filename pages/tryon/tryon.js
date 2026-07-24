@@ -131,13 +131,22 @@ Page({
 
     const inventory = this.buildInventory(lockedIds);
 
+    // 读取最近已生成的搭配组合签名，让模型避开重复
+    const avoidSets = wx.getStorageSync('recent_outfits') || [];
+
     doubao.simulateProcessingDelay(2500)
       .then(() => doubao.generateOutfitSuggestion(
         inventory, promptOccasion, MOCK_WEATHER.condition, MOCK_WEATHER.temp,
-        userStats.topStyle, lockedIds
+        userStats.topStyle, lockedIds, avoidSets
       ))
       .then(outfit => {
         clearInterval(textInterval);
+        // 记录本次搭配的 id 组合签名，供下次避开（最多保留 5 组）
+        const ids = (outfit.items || []).map(i => i.id).sort().join(',');
+        if (ids) {
+          const next = [ids, ...avoidSets.filter(s => s !== ids)].slice(0, 5);
+          wx.setStorageSync('recent_outfits', next);
+        }
         const preview = this.buildOutfitPreview(outfit);
         this.setData({ generatedOutfit: outfit, outfitPreview: preview, step: 'RESULT' });
       })

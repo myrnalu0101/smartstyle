@@ -538,6 +538,7 @@ aiRouter.post('/outfit', async (req: AuthRequest, res: Response): Promise<void> 
   const temperature = req.body?.temperature;
   const userStyle = String(req.body?.userStyle || '').trim();
   const lockedItemIds: string[] = Array.isArray(req.body?.lockedItemIds) ? req.body.lockedItemIds : [];
+  const avoidSets: string[] = Array.isArray(req.body?.avoidSets) ? req.body.avoidSets : [];
 
   // 衣橱空 → 直接兜底
   if (!wardrobe.length) {
@@ -567,6 +568,7 @@ aiRouter.post('/outfit', async (req: AuthRequest, res: Response): Promise<void> 
     (weather || temperature !== undefined ? `天气：${weather || '未知'}${temperature !== undefined ? `，约${temperature}°C` : ''}。` : '') +
     (userStyle ? `用户风格偏好：${userStyle}。` : '') +
     (lockedValid.length ? `必须包含这些单品：${lockedValid.join(',')}。` : '') +
+    (avoidSets.length ? `请尽量避开和以下组合雷同（每串是一组已用过的 id 集合）：${avoidSets.join(' | ')}。` : '') +
     '只返回 JSON，不要任何解释或 markdown：{"selectedItemIds":["id1","id2"],"score":0到100的整数,"reasoning":"一句话说明搭配思路"}。selectedItemIds 必须是清单里真实存在的 id。';
 
   const userText = '我的衣橱清单：\n' + lines.join('\n') + '\n\n请为我搭配一套。';
