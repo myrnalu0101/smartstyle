@@ -96,6 +96,19 @@ aiRouter.post('/segment', async (req: AuthRequest, res: Response): Promise<void>
     return;
   }
 
+  // 1. 从 imageUrl 解析本地文件名并读取本地图片流
+  //    （Advance 版本直接传本地文件流，绕过"必须上海 OSS URL"的限制）
+  const filename = filenameFromUrl(imageUrl);
+  if (!filename) {
+    res.json({ cutoutUrl: imageUrl, segmented: false });
+    return;
+  }
+  const localPath = path.join(UPLOADS_DIR, filename);
+  if (!fs.existsSync(localPath)) {
+    res.json({ cutoutUrl: imageUrl, segmented: false });
+    return;
+  }
+
   try {
     // 动态 require 阿里云 SDK（default export 才是 Client 构造器）
     const aliMod: any = require('@alicloud/imageseg20191230');
@@ -110,34 +123,27 @@ aiRouter.post('/segment', async (req: AuthRequest, res: Response): Promise<void>
     });
     const client = new Client(config);
 
-    // 用服装分割（SegmentCloth），比通用分割更贴合"抠出衣服主体"
-    const segReq = new aliMod.SegmentClothRequest({ imageURL: imageUrl });
+    // 服装分割 Advance：用本地文件流，识别出衣服各部位
+    const segReq = new aliMod.SegmentClothAdvanceRequest({
+      imageURLObject: fs.createReadStream(localPath),
+    });
     const runtime = new RuntimeOptions({ readTimeout: 60000, connectTimeout: 30000 });
-    const resp = await client.segmentClothWithOptions(segReq, runtime);
+    const resp = await client.segmentClothAdvance(segReq, runtime);
 
-    // 返回结构：data.elements[0].imageURL (http 开头) 或 base64
+    // data.elements[] 每个是一件抠好的衣服，imageURL 是阿里云临时 OSS URL（有时效）
     const elements = (resp?.body?.data?.elements as any[]) || [];
     const first = elements[0];
-    let outB64 = '';
-    let outExt = 'png';
     const cutUrl: string = first?.imageURL;
-    if (cutUrl && cutUrl.startsWith('http')) {
-      // 阿里云返回了公网 URL，下载存本地
-      const imgResp = await fetch(cutUrl);
-      const buf = Buffer.from(await imgResp.arrayBuffer());
-      outExt = path.extname(new URL(cutUrl).pathname).slice(1) || 'png';
-      outB64 = buf.toString('base64');
-    } else if (first?.imageURL) {
-      // base64 形式
-      outB64 = first.imageURL;
-    } else {
+    if (!cutUrl || !cutUrl.startsWith('http')) {
       res.json({ cutoutUrl: imageUrl, segmented: false });
       return;
     }
 
-    // 存为新文件
-    const newFile = `cutout-${uuidv4()}.${outExt}`;
-    fs.writeFileSync(path.join(UPLOADS_DIR, newFile), Buffer.from(outB64, 'base64'));
+    // 下载阿里云返回的抠图，存为本地文件，生成自己的持久 URL
+    const imgResp = await fetch(cutUrl);
+    const buf = Buffer.from(await imgResp.arrayBuffer());
+    const newFile = `cutout-${uuidv4()}.png`;
+    fs.writeFileSync(path.join(UPLOADS_DIR, newFile), buf);
 
     const publicUrl = `${req.protocol}://${req.get('host')}/uploads/${newFile}`;
     res.json({ cutoutUrl: publicUrl, segmented: true });
